@@ -20,11 +20,15 @@ const KNOWN_00631L_SPLITS: SplitAdjustment[] = [
   { effectiveDate: '2026-03-31', ratio: 22 },
 ];
 
-export function adjust00631LForSplits(rows: OhlcRow[]): AdjustedPrices {
+const KNOWN_0050_SPLITS: SplitAdjustment[] = [
+  { effectiveDate: '2025-06-18', ratio: 4 },
+];
+
+function adjustForSplits(rows: OhlcRow[], splits: SplitAdjustment[]): AdjustedPrices {
   let adjusted = rows.map((row) => ({ ...row }));
   const appliedSplits: SplitAdjustment[] = [];
 
-  for (const split of KNOWN_00631L_SPLITS) {
+  for (const split of splits) {
     const firstPostSplit = adjusted.findIndex((row) => row.date >= split.effectiveDate);
     if (firstPostSplit <= 0) continue;
 
@@ -49,4 +53,12 @@ export function adjust00631LForSplits(rows: OhlcRow[]): AdjustedPrices {
   }
 
   return { rows: adjusted, appliedSplits };
+}
+
+export function adjust00631LForSplits(rows: OhlcRow[]): AdjustedPrices {
+  return adjustForSplits(rows, KNOWN_00631L_SPLITS);
+}
+
+export function adjust0050ForSplits(rows: OhlcRow[]): AdjustedPrices {
+  return adjustForSplits(rows, KNOWN_0050_SPLITS);
 }

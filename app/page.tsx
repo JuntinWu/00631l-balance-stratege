@@ -1,7 +1,8 @@
 'use client';
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { adjust00631LForSplits, type OhlcRow } from './price-adjustments';
+import Ma240Strategy from './ma240-strategy';
+import { adjust0050ForSplits, adjust00631LForSplits, type OhlcRow } from './price-adjustments';
 
 type PriceRow = OhlcRow;
 type Settings = {
@@ -265,6 +266,8 @@ function parseCsv(text: string): PriceRow[] {
 export default function Home() {
   const [data, setData] = useState<PriceRow[]>([]);
   const [builtinData, setBuiltinData] = useState<PriceRow[]>([]);
+  const [baseData, setBaseData] = useState<PriceRow[]>([]);
+  const [activeStrategy, setActiveStrategy] = useState<'threshold' | 'ma240'>('threshold');
   const [dataName, setDataName] = useState('尚未選擇檔案');
   const [isCustom, setIsCustom] = useState(false);
   const [splitAdjusted, setSplitAdjusted] = useState(false);
@@ -290,17 +293,24 @@ export default function Home() {
   }, [data, endDate, settings, startDate]);
 
   useEffect(() => {
-    fetch('/data/00631L.json')
-      .then((response) => {
-        if (!response.ok) throw new Error('資料載入失敗');
-        return response.json() as Promise<PriceRow[]>;
+    Promise.all([fetch('/data/00631L.json'), fetch('/data/0050.json')])
+      .then(async ([leveragedResponse, baseResponse]) => {
+        if (!leveragedResponse.ok || !baseResponse.ok) throw new Error('資料載入失敗');
+        const [rawLeveraged, rawBase] = await Promise.all([
+          leveragedResponse.json() as Promise<PriceRow[]>,
+          baseResponse.json() as Promise<PriceRow[]>,
+        ]);
+        return {
+          leveraged: adjust00631LForSplits(rawLeveraged),
+          base: adjust0050ForSplits(rawBase),
+        };
       })
-      .then((rawRows) => {
-        const normalized = adjust00631LForSplits(rawRows);
-        const rows = normalized.rows;
+      .then(({ leveraged, base }) => {
+        const rows = leveraged.rows;
         setData(rows);
         setBuiltinData(rows);
-        setSplitAdjusted(normalized.appliedSplits.length > 0);
+        setBaseData(base.rows);
+        setSplitAdjusted(leveraged.appliedSplits.length > 0);
         setStartDate(rows[0].date);
         setEndDate(rows.at(-1)!.date);
         setStatus(`內建 00631L，共 ${money.format(rows.length)} 筆`);
@@ -352,20 +362,28 @@ export default function Home() {
     <main>
       <header className="topbar">
         <a className="brand" href="#top" aria-label="00631L 回測策略首頁"><span className="brand-mark">回</span><span>00631L 回測策略</span></a>
-        <nav aria-label="頁面導覽"><a href="#settings">策略設定</a><a href="#results">回測結果</a><a href="#method">計算說明</a></nav>
+        <nav aria-label="頁面導覽"><a href={activeStrategy === 'threshold' ? '#settings' : '#ma-settings'}>策略設定</a><a href={activeStrategy === 'threshold' ? '#results' : '#ma-results'}>回測結果</a><a href={activeStrategy === 'threshold' ? '#method' : '#ma-method'}>計算說明</a></nav>
         <span className="status-pill"><i />本機運算，不上傳資料</span>
       </header>
 
       <div className="page" id="top">
         <section className="hero">
           <div>
-            <p className="eyebrow">00631L × 現金</p>
+            <p className="eyebrow">{activeStrategy === 'threshold' ? '00631L × 現金' : '0050 240MA × 每月加碼'}</p>
             <h1>00631L<br /><em>回測策略</em></h1>
-            <p className="hero-copy">當價格跨越設定門檻，自動將 00631L 與現金調回目標比例。用歷史資料快速檢視報酬、回撤與每次交易。</p>
+            <p className="hero-copy">{activeStrategy === 'threshold' ? '當價格跨越設定門檻，自動將 00631L 與現金調回目標比例。用歷史資料快速檢視報酬、回撤與每次交易。' : '用 0050 的 240 日均線決定每月新資金的去向：年線上買 0050，年線下買 00631L。'}</p>
           </div>
-          <div className="hero-note"><span>規則</span><strong>漲到上門檻</strong><b>賣出正二</b><hr /><strong>跌到下門檻</strong><b>買進正二</b></div>
+          {activeStrategy === 'threshold'
+            ? <div className="hero-note"><span>規則</span><strong>漲到上門檻</strong><b>賣出正二</b><hr /><strong>跌到下門檻</strong><b>買進正二</b></div>
+            : <div className="hero-note ma-note"><span>240MA</span><strong>年線之上</strong><b>新資金買 0050</b><hr /><strong>年線之下</strong><b>新資金買 00631L</b></div>}
         </section>
 
+        <div className="strategy-tabs" role="tablist" aria-label="選擇回測策略">
+          <button role="tab" aria-selected={activeStrategy === 'threshold'} className={activeStrategy === 'threshold' ? 'active' : ''} onClick={() => setActiveStrategy('threshold')}><span>01</span><strong>門檻式再平衡</strong><small>價格漲跌觸發</small></button>
+          <button role="tab" aria-selected={activeStrategy === 'ma240'} className={activeStrategy === 'ma240' ? 'active' : ''} onClick={() => setActiveStrategy('ma240')}><span>02</span><strong>240 年線加碼</strong><small>新資金擇標的</small></button>
+        </div>
+
+        {activeStrategy === 'threshold' ? <>
         <section className="workspace" id="settings">
           <div className="section-heading"><div><span>01</span><h2>載入價格資料</h2></div><p>支援內建資料或自行匯入 CSV</p></div>
           <div className="source-grid">
@@ -451,6 +469,7 @@ export default function Home() {
         </section>}
 
         <section className="method" id="method"><div><span>03</span><h2>計算方式</h2></div><ol><li><b>起始建倉</b><p>依目標比例買入 00631L，其餘保留現金。</p></li><li><b>逐日檢查</b><p>依開盤、最高、最低、收盤順序，比對上次觸發價。</p></li><li><b>觸發再平衡</b><p>跨越門檻就買賣至目標比例，並重設參考價。</p></li></ol></section>
+        </> : <Ma240Strategy baseRows={baseData} leveragedRows={builtinData} />}
       </div>
       <footer><span>00631L 回測策略</span><p>所有計算皆在瀏覽器本機完成・歷史績效不代表未來報酬</p></footer>
     </main>

@@ -4,17 +4,17 @@ import './globals.css';
 export const metadata: Metadata = {
   metadataBase: new URL('https://hengce-00631l-threshold.juntin.chatgpt.site'),
   title: '00631L 回測策略',
-  description: '載入 00631L 歷史價格，以自訂價格門檻、資產比例與交易成本進行再平衡回測。',
+  description: '00631L 門檻式再平衡與 0050 240 年線加碼策略回測。',
   openGraph: {
     title: '00631L 回測策略',
-    description: '價格跨越門檻，自動將 00631L 與現金調回目標比例。',
+    description: '回測門檻式再平衡，以及年線上買 0050、年線下買 00631L 的每月加碼策略。',
     type: 'website',
     images: [{ url: '/og.png', width: 1731, height: 909, alt: '00631L 回測策略' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: '00631L 回測策略',
-    description: '價格跨越門檻，自動將 00631L 與現金調回目標比例。',
+    description: '回測門檻式再平衡，以及年線上買 0050、年線下買 00631L 的每月加碼策略。',
     images: ['/og.png'],
   },
 };
