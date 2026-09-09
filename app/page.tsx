@@ -1,8 +1,9 @@
 'use client';
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { adjust00631LForSplits, type OhlcRow } from './price-adjustments';
 
-type PriceRow = { date: string; open: number; high: number; low: number; close: number };
+type PriceRow = OhlcRow;
 type Settings = {
   capitalWan: number;
   targetPct: number;
@@ -266,6 +267,7 @@ export default function Home() {
   const [builtinData, setBuiltinData] = useState<PriceRow[]>([]);
   const [dataName, setDataName] = useState('尚未選擇檔案');
   const [isCustom, setIsCustom] = useState(false);
+  const [splitAdjusted, setSplitAdjusted] = useState(false);
   const [settings, setSettings] = useState(defaultSettings);
   const [startDate, setStartDate] = useState('2014-10-31');
   const [endDate, setEndDate] = useState('2026-09-09');
@@ -293,9 +295,12 @@ export default function Home() {
         if (!response.ok) throw new Error('資料載入失敗');
         return response.json() as Promise<PriceRow[]>;
       })
-      .then((rows) => {
+      .then((rawRows) => {
+        const normalized = adjust00631LForSplits(rawRows);
+        const rows = normalized.rows;
         setData(rows);
         setBuiltinData(rows);
+        setSplitAdjusted(normalized.appliedSplits.length > 0);
         setStartDate(rows[0].date);
         setEndDate(rows.at(-1)!.date);
         setStatus(`內建 00631L，共 ${money.format(rows.length)} 筆`);
@@ -308,10 +313,12 @@ export default function Home() {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const rows = parseCsv(await file.text());
+      const normalized = adjust00631LForSplits(parseCsv(await file.text()));
+      const rows = normalized.rows;
       setData(rows);
       setDataName(file.name);
       setIsCustom(true);
+      setSplitAdjusted(normalized.appliedSplits.length > 0);
       setStartDate(rows[0].date);
       setEndDate(rows.at(-1)!.date);
       setResult(null);
@@ -328,6 +335,7 @@ export default function Home() {
     setData(builtinData);
     setDataName('尚未選擇檔案');
     setIsCustom(false);
+    setSplitAdjusted(true);
     setStartDate(builtinData[0].date);
     setEndDate(builtinData.at(-1)!.date);
     setResult(runBacktest(builtinData, settings));
@@ -374,7 +382,10 @@ export default function Home() {
               <i>{isCustom ? '更換檔案' : '選擇檔案'}</i>
             </label>
           </div>
-          <p className="data-footnote">資料來源：FinMind TaiwanStockPrice 公開資料集。價格未還原；回測結果僅供研究，不構成投資建議。</p>
+          <p className="data-footnote">
+            {splitAdjusted && <span className="adjusted-badge">✓ 已還原 2026/03/31 的 22：1 分割</span>}
+            資料來源：FinMind TaiwanStockPrice 公開資料集。回測結果僅供研究，不構成投資建議。
+          </p>
         </section>
 
         <section className="workspace">

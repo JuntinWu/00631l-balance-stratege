@@ -75,7 +75,8 @@ h2, h3, p { margin-top: 0; }
 .source-card strong { font-size: 15px; }
 .source-card small { margin-top: 8px; color: var(--muted); font-size: 12px; }
 .source-card > i { color: var(--green); font-size: 11px; font-style: normal; font-weight: 800; letter-spacing: .08em; }
-.data-footnote { margin: 14px 0 0; color: var(--muted); font-size: 12px; }
+.data-footnote { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 0 0; color: var(--muted); font-size: 12px; }
+.adjusted-badge { display: inline-flex; padding: 5px 8px; border: 1px solid #aad8c6; background: var(--mint); color: var(--green); font-weight: 800; }
 
 .setting-block, .costs { padding: 28px 0; border-bottom: 1px solid var(--line); }
 .setting-block h3, .costs summary { margin: 0 0 20px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
