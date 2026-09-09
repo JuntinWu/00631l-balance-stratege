@@ -369,18 +369,18 @@ export default function Home() {
       <div className="page" id="top">
         <section className="hero">
           <div>
-            <p className="eyebrow">{activeStrategy === 'threshold' ? '00631L × 現金' : '0050 240MA × 每月加碼'}</p>
+            <p className="eyebrow">{activeStrategy === 'threshold' ? '00631L × 現金' : '0050 240MA × 回撤階梯'}</p>
             <h1>00631L<br /><em>回測策略</em></h1>
-            <p className="hero-copy">{activeStrategy === 'threshold' ? '當價格跨越設定門檻，自動將 00631L 與現金調回目標比例。用歷史資料快速檢視報酬、回撤與每次交易。' : '用 0050 的 240 日均線決定每月新資金的去向：年線上買 0050，年線下買 00631L。'}</p>
+            <p className="hero-copy">{activeStrategy === 'threshold' ? '當價格跨越設定門檻，自動將 00631L 與現金調回目標比例。用歷史資料快速檢視報酬、回撤與每次交易。' : '新資金依 0050 的 240 日均線選擇標的；既有 0050 遇到回撤時，再分四階段逐步轉成 00631L。'}</p>
           </div>
           {activeStrategy === 'threshold'
             ? <div className="hero-note"><span>規則</span><strong>漲到上門檻</strong><b>賣出正二</b><hr /><strong>跌到下門檻</strong><b>買進正二</b></div>
-            : <div className="hero-note ma-note"><span>240MA</span><strong>年線之上</strong><b>新資金買 0050</b><hr /><strong>年線之下</strong><b>新資金買 00631L</b></div>}
+            : <div className="hero-note ma-note"><span>雙重規則</span><strong>新資金看 240MA</strong><b>線上 0050／線下 00631L</b><hr /><strong>既有 0050 看回撤</strong><b>−10% 至 −25% 分批轉正二</b></div>}
         </section>
 
         <div className="strategy-tabs" role="tablist" aria-label="選擇回測策略">
           <button role="tab" aria-selected={activeStrategy === 'threshold'} className={activeStrategy === 'threshold' ? 'active' : ''} onClick={() => setActiveStrategy('threshold')}><span>01</span><strong>門檻式再平衡</strong><small>價格漲跌觸發</small></button>
-          <button role="tab" aria-selected={activeStrategy === 'ma240'} className={activeStrategy === 'ma240' ? 'active' : ''} onClick={() => setActiveStrategy('ma240')}><span>02</span><strong>240 年線加碼</strong><small>新資金擇標的</small></button>
+          <button role="tab" aria-selected={activeStrategy === 'ma240'} className={activeStrategy === 'ma240' ? 'active' : ''} onClick={() => setActiveStrategy('ma240')}><span>02</span><strong>240 年線＋分批轉正二</strong><small>新資金擇標的・回撤換倉</small></button>
         </div>
 
         {activeStrategy === 'threshold' ? <>

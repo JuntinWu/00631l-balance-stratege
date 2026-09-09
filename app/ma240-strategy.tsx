@@ -9,6 +9,7 @@ const defaults: Ma240Settings = {
   monthlyWan: 5,
   commissionPct: 0.1425,
   discount: 1.8,
+  transactionTaxPct: 0.1,
 };
 
 const money = new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 0 });
@@ -126,13 +127,22 @@ export default function Ma240Strategy({ baseRows, leveragedRows }: { baseRows: O
 
   return <div className="strategy-pane ma-strategy">
     <section className="workspace" id="ma-settings">
-      <div className="section-heading"><div><span>01</span><h2>240 年線加碼規則</h2></div><p>訊號使用 0050，不看正二本身</p></div>
+      <div className="section-heading"><div><span>01</span><h2>新資金擇標的＋分批轉正二</h2></div><p>年線管新錢，回撤管既有 0050</p></div>
       <div className="ma-rule">
         <article><span>0050 在 240MA 之上</span><strong>新資金買 0050</strong><p>多頭軌道先累積原型 ETF，保留較低波動。</p></article>
         <i>或</i>
         <article className="below"><span>0050 在 240MA 之下</span><strong>新資金買 00631L</strong><p>市場修正時，用同一筆定期資金增加曝險。</p></article>
       </div>
-      <p className="ma-principle"><b>只決定新錢買什麼：</b>既有部位不賣出、不因穿越年線換回；每月第一個可交易日依當日收盤價與 240MA 執行。</p>
+      <div className="conversion-rule">
+        <div><span>0050 自高點回撤</span><strong>既有 0050 分批換成 00631L</strong><p>每輪以 0050 創新高時的持股為基準；轉換只動用賣出 0050 的資金，不另外投入。</p></div>
+        <ol>
+          <li><b>−10%</b><span>轉 20%</span><em>累計 20%</em></li>
+          <li><b>−15%</b><span>再轉 25%</span><em>累計 45%</em></li>
+          <li><b>−20%</b><span>再轉 25%</span><em>累計 70%</em></li>
+          <li><b>−25%</b><span>再轉 30%</span><em>累計 100%</em></li>
+        </ol>
+      </div>
+      <p className="ma-principle"><b>兩把尺分開使用：</b>240MA 只決定每月新資金買什麼；回撤階梯只決定既有 0050 要轉多少。轉成 00631L 後，即使反彈或重回年線上也不主動換回。</p>
     </section>
 
     <section className="workspace">
@@ -153,18 +163,19 @@ export default function Ma240Strategy({ baseRows, leveragedRows }: { baseRows: O
         </div>
       </div>
       <details className="costs">
-        <summary>交易成本設定 <span>買進成本 {(settings.commissionPct * settings.discount / 10).toFixed(4)}%</span></summary>
+        <summary>交易成本設定 <span>買進 {(settings.commissionPct * settings.discount / 10).toFixed(4)}%・賣出另計 ETF 稅 {settings.transactionTaxPct}%</span></summary>
         <div className="form-grid compact">
           <MaField label="手續費牌告" suffix="%" value={settings.commissionPct} onChange={setNumber('commissionPct')} step={0.0001} />
           <MaField label="手續費折數" suffix="折" value={settings.discount} onChange={setNumber('discount')} step={0.1} />
+          <MaField label="ETF 交易稅（賣出）" suffix="%" value={settings.transactionTaxPct} onChange={setNumber('transactionTaxPct')} step={0.01} />
         </div>
       </details>
       {error && <p className="error" role="alert">{error}</p>}
-      <button className="run-button" onClick={() => execute()} disabled={!baseRows.length || !leveragedRows.length}><span>▶</span>執行 240 年線回測<small>每月第一個交易日投入</small></button>
+      <button className="run-button" onClick={() => execute()} disabled={!baseRows.length || !leveragedRows.length}><span>▶</span>執行複合策略回測<small>新資金擇標的＋0050 回撤分批轉換</small></button>
     </section>
 
     {result && <section className="results" id="ma-results" ref={resultRef}>
-      <div className="results-head"><div><p className="eyebrow">240MA BACKTEST</p><h2>回測結果</h2></div><div className="strategy-chip">年線上買 0050<b>年線下買 00631L</b></div></div>
+      <div className="results-head"><div><p className="eyebrow">240MA + DRAWDOWN LADDER</p><h2>回測結果</h2></div><div className="strategy-chip">新資金看 240MA<b>既有 0050 看回撤</b></div></div>
       <div className="metrics ma-metrics">
         <article className="metric primary"><span>期末資產</span><strong>{money.format(result.ending)}<small>元</small></strong><p>累計投入 {money.format(result.totalInvested)} 元</p></article>
         <article className="metric"><span>累計損益</span><strong className={result.profit >= 0 ? 'positive' : 'negative'}>{result.profit >= 0 ? '+' : ''}{money.format(result.profit)}</strong></article>
@@ -177,13 +188,17 @@ export default function Ma240Strategy({ baseRows, leveragedRows }: { baseRows: O
         <article className="panel"><div className="panel-title"><h3>0050 與 240MA</h3><span>年線下的月份改買 00631L</span></div><SignalChart points={result.curve} /></article>
         <article className="panel annual-panel"><div className="panel-title"><h3>逐年報酬</h3><span>時間加權</span></div><div className="annual-list">{result.annual.map((row) => <div key={row.year}><b>{row.year}</b><span className={row.returnPct >= 0 ? 'positive' : 'negative'}>{signedPct(row.returnPct)}</span><em>{compactMoney(row.ending)}</em></div>)}</div></article>
       </div>
-      <div className="buy-summary"><span><i className="base-dot" />年線上買 0050 <b>{result.baseBuys} 次</b></span><span><i className="leveraged-dot" />年線下買 00631L <b>{result.leveragedBuys} 次</b></span></div>
+      <div className="buy-summary"><span><i className="base-dot" />年線上買 0050 <b>{result.baseBuys} 次</b></span><span><i className="leveraged-dot" />年線下買 00631L <b>{result.leveragedBuys} 次</b></span><span><i className="conversion-dot" />0050 分批轉換 <b>{result.conversions.length} 次</b></span><span>期末配置 <b>0050 {result.baseEndingWeight.toFixed(1)}% ／ 00631L {result.leveragedEndingWeight.toFixed(1)}%</b></span></div>
       <details className="panel trade-panel" open>
+        <summary><span>0050 分批轉正二紀錄</span><b>{result.conversions.length} 筆・累計 {compactMoney(result.convertedAmount)}</b></summary>
+        <div className="table-wrap"><table><thead><tr><th>日期</th><th>觸發階梯</th><th>當日回撤</th><th>0050 售價</th><th>00631L 買價</th><th>賣出 0050</th><th>轉換市值</th></tr></thead><tbody>{result.conversions.map((item, index) => <tr key={`${item.date}-${item.triggerPct}-${index}`}><td>{item.date.replaceAll('-', '/')}</td><td className="sell">−{item.triggerPct}%（累計 {item.cumulativePct}%）</td><td className="negative">−{item.drawdownPct.toFixed(2)}%</td><td>{item.basePrice.toFixed(2)}</td><td>{item.leveragedPrice.toFixed(2)}</td><td>{item.baseSharesSold.toFixed(2)} 股</td><td>{money.format(item.grossAmount)} 元</td></tr>)}</tbody></table></div>
+      </details>
+      <details className="panel trade-panel">
         <summary><span>每月加碼紀錄</span><b>{result.buys.length} 筆</b></summary>
         <div className="table-wrap"><table><thead><tr><th>日期</th><th>年線位置</th><th>0050 收盤</th><th>240MA</th><th>動作</th><th>投入金額</th></tr></thead><tbody>{result.buys.map((buy) => <tr key={buy.date}><td>{buy.date.replaceAll('-', '/')}</td><td className={buy.position}>{buy.position === 'above' ? '年線上' : '年線下'}</td><td>{buy.basePrice.toFixed(2)}</td><td>{buy.movingAverage.toFixed(2)}</td><td className={buy.position === 'above' ? 'buy' : 'leverage-buy'}>{buy.action}</td><td>{money.format(buy.amount)} 元</td></tr>)}</tbody></table></div>
       </details>
     </section>}
 
-    <section className="method" id="ma-method"><div><span>03</span><h2>計算方式</h2></div><ol><li><b>先算 240MA</b><p>使用 0050 最近 240 個交易日收盤價平均，作為唯一訊號。</p></li><li><b>每月投入</b><p>每月第一個共同交易日，將設定的新資金投入當月指定標的。</p></li><li><b>只買不換回</b><p>既有 0050 與 00631L 持續持有，年線只影響下一筆新資金。</p></li></ol></section>
+    <section className="method" id="ma-method"><div><span>03</span><h2>計算方式</h2></div><ol><li><b>新資金看 240MA</b><p>每月第一個共同交易日，比較 0050 收盤與最近 240 個交易日均價；線上買 0050、線下買 00631L。</p></li><li><b>回撤從新高計算</b><p>每日以還原分割後的 0050 收盤價更新歷史高點，並計算距高點跌幅。</p></li><li><b>分四階段轉換</b><p>首次跨越 −10%、−15%、−20%、−25% 時，依序賣出該輪基準持股的 20%、25%、25%、30%，同日買進等值 00631L。</p></li><li><b>創新高才開新一輪</b><p>0050 創新高時，以當下剩餘持股重設下一輪基準；已轉成的 00631L 不換回，並完整計入買賣成本。</p></li></ol></section>
   </div>;
 }

@@ -5,6 +5,7 @@ export type Ma240Settings = {
   monthlyWan: number;
   commissionPct: number;
   discount: number;
+  transactionTaxPct: number;
 };
 
 export type Ma240CurvePoint = {
@@ -16,6 +17,7 @@ export type Ma240CurvePoint = {
   twr: number;
   basePrice: number;
   movingAverage: number;
+  drawdownPct: number;
 };
 
 export type Ma240Buy = {
@@ -27,6 +29,18 @@ export type Ma240Buy = {
   amount: number;
 };
 
+export type Ma240Conversion = {
+  date: string;
+  triggerPct: number;
+  cumulativePct: number;
+  drawdownPct: number;
+  basePrice: number;
+  leveragedPrice: number;
+  baseSharesSold: number;
+  grossAmount: number;
+  netAmount: number;
+};
+
 export type Ma240Annual = {
   year: string;
   returnPct: number;
@@ -36,6 +50,7 @@ export type Ma240Annual = {
 export type Ma240Result = {
   curve: Ma240CurvePoint[];
   buys: Ma240Buy[];
+  conversions: Ma240Conversion[];
   annual: Ma240Annual[];
   totalInvested: number;
   ending: number;
@@ -45,9 +60,19 @@ export type Ma240Result = {
   mdd: number;
   baseBuys: number;
   leveragedBuys: number;
+  convertedAmount: number;
+  baseEndingWeight: number;
+  leveragedEndingWeight: number;
 };
 
 type SignalRow = OhlcRow & { movingAverage: number; leveragedClose: number };
+
+const CONVERSION_LADDER = [
+  { triggerPct: 10, portionPct: 20, cumulativePct: 20 },
+  { triggerPct: 15, portionPct: 25, cumulativePct: 45 },
+  { triggerPct: 20, portionPct: 25, cumulativePct: 70 },
+  { triggerPct: 25, portionPct: 30, cumulativePct: 100 },
+] as const;
 
 function buildSignals(baseRows: OhlcRow[], leveragedRows: OhlcRow[], days: number): SignalRow[] {
   const leveragedByDate = new Map(leveragedRows.map((row) => [row.date, row.close]));
@@ -77,10 +102,14 @@ export function runMa240Backtest(
   if (signals.length < 2) throw new Error('所選期間沒有足夠資料計算 240 日均線');
 
   const buyFee = (settings.commissionPct / 100) * (settings.discount / 10);
+  const sellCost = buyFee + Math.max(0, settings.transactionTaxPct) / 100;
   const initial = Math.max(0, settings.initialWan) * 10_000;
   const monthly = Math.max(0, settings.monthlyWan) * 10_000;
   let baseShares = 0;
   let leveragedShares = 0;
+  let highWater = 0;
+  let cycleBaseShares = 0;
+  let triggeredRungs = new Set<number>();
   let totalInvested = 0;
   let previousTotal = 0;
   let timeWeightedIndex = 1;
@@ -89,6 +118,7 @@ export function runMa240Backtest(
   let previousMonth = '';
   const curve: Ma240CurvePoint[] = [];
   const buys: Ma240Buy[] = [];
+  const conversions: Ma240Conversion[] = [];
 
   for (const row of signals) {
     const month = row.date.slice(0, 7);
@@ -114,6 +144,35 @@ export function runMa240Backtest(
       });
     }
 
+    if (row.close >= highWater) {
+      highWater = row.close;
+      cycleBaseShares = baseShares;
+      triggeredRungs = new Set<number>();
+    }
+    const drawdownPct = highWater > 0 ? (highWater - row.close) / highWater * 100 : 0;
+
+    for (const rung of CONVERSION_LADDER) {
+      if (drawdownPct + 1e-9 < rung.triggerPct || triggeredRungs.has(rung.triggerPct)) continue;
+      triggeredRungs.add(rung.triggerPct);
+      const sharesToSell = Math.min(baseShares, cycleBaseShares * rung.portionPct / 100);
+      if (sharesToSell <= 0) continue;
+      const grossAmount = sharesToSell * row.close;
+      const netAmount = grossAmount * (1 - sellCost);
+      baseShares -= sharesToSell;
+      leveragedShares += (netAmount / (1 + buyFee)) / row.leveragedClose;
+      conversions.push({
+        date: row.date,
+        triggerPct: rung.triggerPct,
+        cumulativePct: rung.cumulativePct,
+        drawdownPct,
+        basePrice: row.close,
+        leveragedPrice: row.leveragedClose,
+        baseSharesSold: sharesToSell,
+        grossAmount,
+        netAmount,
+      });
+    }
+
     const base = baseShares * row.close;
     const leveraged = leveragedShares * row.leveragedClose;
     const total = base + leveraged;
@@ -130,6 +189,7 @@ export function runMa240Backtest(
       twr: timeWeightedIndex,
       basePrice: row.close,
       movingAverage: row.movingAverage,
+      drawdownPct,
     });
     previousTotal = total;
   }
@@ -144,6 +204,7 @@ export function runMa240Backtest(
   }
 
   const ending = curve.at(-1)?.total ?? 0;
+  const endingPoint = curve.at(-1);
   const yearsElapsed = Math.max(
     (new Date(signals.at(-1)!.date).getTime() - new Date(signals[0].date).getTime()) / (365.25 * 864e5),
     1 / 365.25,
@@ -151,6 +212,7 @@ export function runMa240Backtest(
   return {
     curve,
     buys,
+    conversions,
     annual,
     totalInvested,
     ending,
@@ -160,5 +222,8 @@ export function runMa240Backtest(
     mdd: mdd * 100,
     baseBuys: buys.filter((buy) => buy.position === 'above').length,
     leveragedBuys: buys.filter((buy) => buy.position === 'below').length,
+    convertedAmount: conversions.reduce((sum, conversion) => sum + conversion.grossAmount, 0),
+    baseEndingWeight: ending && endingPoint ? endingPoint.base / ending * 100 : 0,
+    leveragedEndingWeight: ending && endingPoint ? endingPoint.leveraged / ending * 100 : 0,
   };
 }
