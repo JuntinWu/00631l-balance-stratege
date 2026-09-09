@@ -351,7 +351,7 @@ export default function Home() {
   return (
     <main>
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="衡策首頁"><span className="brand-mark">衡</span><span>衡策</span></a>
+        <a className="brand" href="#top" aria-label="00631L 回測策略首頁"><span className="brand-mark">回</span><span>00631L 回測策略</span></a>
         <nav aria-label="頁面導覽"><a href="#settings">策略設定</a><a href="#results">回測結果</a><a href="#method">計算說明</a></nav>
         <span className="status-pill"><i />本機運算，不上傳資料</span>
       </header>
@@ -360,7 +360,7 @@ export default function Home() {
         <section className="hero">
           <div>
             <p className="eyebrow">00631L × 現金</p>
-            <h1>正二門檻式<br /><em>再平衡回測</em></h1>
+            <h1>00631L<br /><em>回測策略</em></h1>
             <p className="hero-copy">當價格跨越設定門檻，自動將 00631L 與現金調回目標比例。用歷史資料快速檢視報酬、回撤與每次交易。</p>
           </div>
           <div className="hero-note"><span>規則</span><strong>漲到上門檻</strong><b>賣出正二</b><hr /><strong>跌到下門檻</strong><b>買進正二</b></div>
@@ -452,7 +452,7 @@ export default function Home() {
 
         <section className="method" id="method"><div><span>03</span><h2>計算方式</h2></div><ol><li><b>起始建倉</b><p>依目標比例買入 00631L，其餘保留現金。</p></li><li><b>逐日檢查</b><p>依開盤、最高、最低、收盤順序，比對上次觸發價。</p></li><li><b>觸發再平衡</b><p>跨越門檻就買賣至目標比例，並重設參考價。</p></li></ol></section>
       </div>
-      <footer><span>衡策 Threshold Lab</span><p>所有計算皆在瀏覽器本機完成・歷史績效不代表未來報酬</p></footer>
+      <footer><span>00631L 回測策略</span><p>所有計算皆在瀏覽器本機完成・歷史績效不代表未來報酬</p></footer>
     </main>
   );
 }
