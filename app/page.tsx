@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Ma240Strategy from './ma240-strategy';
+import Ryan404020Strategy from './ryan-404020-strategy';
 import { adjust0050ForSplits, adjust00631LForSplits, type OhlcRow } from './price-adjustments';
 
 type PriceRow = OhlcRow;
@@ -267,7 +268,8 @@ export default function Home() {
   const [data, setData] = useState<PriceRow[]>([]);
   const [builtinData, setBuiltinData] = useState<PriceRow[]>([]);
   const [baseData, setBaseData] = useState<PriceRow[]>([]);
-  const [activeStrategy, setActiveStrategy] = useState<'threshold' | 'ma240'>('threshold');
+  const [qqqData, setQqqData] = useState<PriceRow[]>([]);
+  const [activeStrategy, setActiveStrategy] = useState<'threshold' | 'ma240' | 'ryan404020'>('threshold');
   const [dataName, setDataName] = useState('尚未選擇檔案');
   const [isCustom, setIsCustom] = useState(false);
   const [splitAdjusted, setSplitAdjusted] = useState(false);
@@ -293,23 +295,26 @@ export default function Home() {
   }, [data, endDate, settings, startDate]);
 
   useEffect(() => {
-    Promise.all([fetch('/data/00631L.json'), fetch('/data/0050.json')])
-      .then(async ([leveragedResponse, baseResponse]) => {
-        if (!leveragedResponse.ok || !baseResponse.ok) throw new Error('資料載入失敗');
-        const [rawLeveraged, rawBase] = await Promise.all([
+    Promise.all([fetch('/data/00631L.json'), fetch('/data/0050.json'), fetch('/data/QQQ.json')])
+      .then(async ([leveragedResponse, baseResponse, qqqResponse]) => {
+        if (!leveragedResponse.ok || !baseResponse.ok || !qqqResponse.ok) throw new Error('資料載入失敗');
+        const [rawLeveraged, rawBase, qqq] = await Promise.all([
           leveragedResponse.json() as Promise<PriceRow[]>,
           baseResponse.json() as Promise<PriceRow[]>,
+          qqqResponse.json() as Promise<PriceRow[]>,
         ]);
         return {
           leveraged: adjust00631LForSplits(rawLeveraged),
           base: adjust0050ForSplits(rawBase),
+          qqq,
         };
       })
-      .then(({ leveraged, base }) => {
+      .then(({ leveraged, base, qqq }) => {
         const rows = leveraged.rows;
         setData(rows);
         setBuiltinData(rows);
         setBaseData(base.rows);
+        setQqqData(qqq);
         setSplitAdjusted(leveraged.appliedSplits.length > 0);
         setStartDate(rows[0].date);
         setEndDate(rows.at(-1)!.date);
@@ -357,30 +362,38 @@ export default function Home() {
     setSettings((value) => ({ ...value, [key]: Number(event.target.value) }));
   };
   const filteredCount = data.filter((row) => row.date >= startDate && row.date <= endDate).length;
+  const navTargets = activeStrategy === 'threshold'
+    ? ['#settings', '#results', '#method']
+    : activeStrategy === 'ma240'
+      ? ['#ma-settings', '#ma-results', '#ma-method']
+      : ['#ryan-settings', '#ryan-results', '#ryan-method'];
 
   return (
     <main>
       <header className="topbar">
         <a className="brand" href="#top" aria-label="00631L 回測策略首頁"><span className="brand-mark">回</span><span>00631L 回測策略</span></a>
-        <nav aria-label="頁面導覽"><a href={activeStrategy === 'threshold' ? '#settings' : '#ma-settings'}>策略設定</a><a href={activeStrategy === 'threshold' ? '#results' : '#ma-results'}>回測結果</a><a href={activeStrategy === 'threshold' ? '#method' : '#ma-method'}>計算說明</a></nav>
+        <nav aria-label="頁面導覽"><a href={navTargets[0]}>策略設定</a><a href={navTargets[1]}>回測結果</a><a href={navTargets[2]}>計算說明</a></nav>
         <span className="status-pill"><i />本機運算，不上傳資料</span>
       </header>
 
       <div className="page" id="top">
         <section className="hero">
           <div>
-            <p className="eyebrow">{activeStrategy === 'threshold' ? '00631L × 現金' : '0050 240MA × 回撤階梯'}</p>
+            <p className="eyebrow">{activeStrategy === 'threshold' ? '00631L × 現金' : activeStrategy === 'ma240' ? '0050 240MA × 回撤階梯' : '0050 × 00631L × QQQ 風險訊號'}</p>
             <h1>00631L<br /><em>回測策略</em></h1>
-            <p className="hero-copy">{activeStrategy === 'threshold' ? '當價格跨越設定門檻，自動將 00631L 與現金調回目標比例。用歷史資料快速檢視報酬、回撤與每次交易。' : '新資金依 0050 的 240 日均線選擇標的；既有 0050 遇到回撤時，再分四階段逐步轉成 00631L。'}</p>
+            <p className="hero-copy">{activeStrategy === 'threshold' ? '當價格跨越設定門檻，自動將 00631L 與現金調回目標比例。用歷史資料快速檢視報酬、回撤與每次交易。' : activeStrategy === 'ma240' ? '新資金依 0050 的 240 日均線選擇標的；既有 0050 遇到回撤時，再分四階段逐步轉成 00631L。' : '用 40% 0050 打底、40% 00631L 進攻、20% 現金保命；以 0050 年線控制進退，再用 QQQ 年線乖離補上跨市場風險保險。'}</p>
           </div>
           {activeStrategy === 'threshold'
             ? <div className="hero-note"><span>規則</span><strong>漲到上門檻</strong><b>賣出正二</b><hr /><strong>跌到下門檻</strong><b>買進正二</b></div>
-            : <div className="hero-note ma-note"><span>雙重規則</span><strong>新資金看 240MA</strong><b>線上 0050／線下 00631L</b><hr /><strong>既有 0050 看回撤</strong><b>−10% 至 −25% 分批轉正二</b></div>}
+            : activeStrategy === 'ma240'
+              ? <div className="hero-note ma-note"><span>雙重規則</span><strong>新資金看 240MA</strong><b>線上 0050／線下 00631L</b><hr /><strong>既有 0050 看回撤</strong><b>−10% 至 −25% 分批轉正二</b></div>
+              : <div className="hero-note ryan-note"><span>40 / 40 / 20</span><strong>年線失守，正二撤退</strong><b>年線之下只承接 0050</b><hr /><strong>QQQ 低於年線 −10%</strong><b>跨市場強制清倉</b></div>}
         </section>
 
         <div className="strategy-tabs" role="tablist" aria-label="選擇回測策略">
           <button role="tab" aria-selected={activeStrategy === 'threshold'} className={activeStrategy === 'threshold' ? 'active' : ''} onClick={() => setActiveStrategy('threshold')}><span>01</span><strong>門檻式再平衡</strong><small>價格漲跌觸發</small></button>
           <button role="tab" aria-selected={activeStrategy === 'ma240'} className={activeStrategy === 'ma240' ? 'active' : ''} onClick={() => setActiveStrategy('ma240')}><span>02</span><strong>240 年線＋分批轉正二</strong><small>新資金擇標的・回撤換倉</small></button>
+          <button role="tab" aria-selected={activeStrategy === 'ryan404020'} className={activeStrategy === 'ryan404020' ? 'active' : ''} onClick={() => setActiveStrategy('ryan404020')}><span>03</span><strong>40 / 40 / 20 均線策略</strong><small>正二進退・微笑曲線・QQQ 保險</small></button>
         </div>
 
         {activeStrategy === 'threshold' ? <>
@@ -469,7 +482,9 @@ export default function Home() {
         </section>}
 
         <section className="method" id="method"><div><span>03</span><h2>計算方式</h2></div><ol><li><b>起始建倉</b><p>依目標比例買入 00631L，其餘保留現金。</p></li><li><b>逐日檢查</b><p>依開盤、最高、最低、收盤順序，比對上次觸發價。</p></li><li><b>觸發再平衡</b><p>跨越門檻就買賣至目標比例，並重設參考價。</p></li></ol></section>
-        </> : <Ma240Strategy baseRows={baseData} leveragedRows={builtinData} />}
+        </> : activeStrategy === 'ma240'
+          ? <Ma240Strategy baseRows={baseData} leveragedRows={builtinData} />
+          : <Ryan404020Strategy baseRows={baseData} leveragedRows={builtinData} qqqRows={qqqData} />}
       </div>
       <footer><span>00631L 回測策略</span><p>所有計算皆在瀏覽器本機完成・歷史績效不代表未來報酬</p></footer>
     </main>

@@ -10,7 +10,7 @@
     "build": "vinext build",
     "start": "vinext start",
     "test:split": "node --experimental-strip-types scripts/check-split-adjustment.mjs",
-    "test:strategy": "npm run test:split && node --experimental-strip-types scripts/check-ma240-strategy.mjs",
+    "test:strategy": "npm run test:split && node --experimental-strip-types scripts/check-ma240-strategy.mjs && node --experimental-strip-types scripts/check-ryan-404020-strategy.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {

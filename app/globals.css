@@ -57,8 +57,10 @@ a { color: inherit; text-decoration: none; }
 .hero-note hr { border: 0; border-top: 1px dashed rgba(20,38,31,.42); margin: 20px 0; }
 .hero-note.ma-note { background: var(--mint); }
 .hero-note.ma-note > b { color: #226789; }
+.hero-note.ryan-note { background: #f6bf73; transform: rotate(-1deg); }
+.hero-note.ryan-note > b { color: #76381e; }
 
-.strategy-tabs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--ink); border-bottom: 0; background: var(--ink); gap: 1px; }
+.strategy-tabs { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--ink); border-bottom: 0; background: var(--ink); gap: 1px; }
 .strategy-tabs button { min-height: 86px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 15px; padding: 18px 22px; border: 0; background: #e9ebe3; color: var(--muted); text-align: left; cursor: pointer; transition: .18s ease; }
 .strategy-tabs button:hover { background: var(--card); }
 .strategy-tabs button.active { background: var(--ink); color: white; }
@@ -197,6 +199,44 @@ td.above { color: var(--green); font-weight: 800; }
 .conversion-dot { background: var(--red); }
 .signal-chart svg { min-height: 215px; }
 
+.allocation-rule { display: grid; grid-template-columns: 1fr 1fr 1fr; border: 1px solid var(--ink); background: var(--ink); gap: 1px; }
+.allocation-rule article { min-height: 190px; padding: 25px; background: var(--card); }
+.allocation-rule article.attack { background: #e6f1f7; }
+.allocation-rule article.reserve { background: #eef0e8; }
+.allocation-rule span { display: block; color: var(--green); font: italic 40px Georgia, serif; }
+.allocation-rule article.attack span { color: #226f98; }
+.allocation-rule article.reserve span { color: #6f7a74; }
+.allocation-rule strong { display: block; margin-top: 10px; font: 500 21px Georgia, "Noto Serif TC", serif; }
+.allocation-rule p { margin: 14px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.sop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 18px; }
+.sop-card { position: relative; min-height: 180px; padding: 24px; border: 1px solid var(--line); background: var(--card); }
+.sop-card > b { display: inline-flex; padding: 5px 8px; background: var(--ink); color: white; font-size: 10px; letter-spacing: .12em; }
+.sop-card h3 { margin: 20px 0 0; font: 500 20px Georgia, "Noto Serif TC", serif; }
+.sop-card p { margin: 12px 0 0; color: var(--muted); font-size: 12px; line-height: 1.72; }
+.sop-card.danger { border-top: 4px solid var(--red); }
+.sop-card.smile { border-top: 4px solid var(--green); }
+.sop-card.rally { border-top: 4px solid var(--lime); }
+.global-signal { display: grid; grid-template-columns: auto 1fr 1.35fr; align-items: center; gap: 18px; margin-top: 16px; padding: 18px 20px; border: 1px solid #cf9a78; background: #fff1e6; }
+.global-signal span { padding: 6px 9px; background: #76381e; color: white; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
+.global-signal strong { font: 500 19px Georgia, "Noto Serif TC", serif; }
+.global-signal p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.benchmark-grid { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 22px; border: 1px solid var(--ink); background: var(--ink); gap: 1px; }
+.benchmark-card { min-height: 132px; padding: 20px; background: var(--card); }
+.benchmark-card.featured { background: var(--lime); }
+.benchmark-card span { display: block; color: var(--muted); font-size: 11px; }
+.benchmark-card strong { display: block; margin-top: 18px; font: 500 30px Georgia, serif; }
+.benchmark-card p { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
+.ryan-columns { grid-template-columns: 1.6fr .7fr; }
+.ryan-signal-chart .zero-line { stroke: var(--ink); stroke-dasharray: none; opacity: .45; }
+.allocation-summary { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 22px; }
+.allocation-summary span { padding: 11px 14px; border: 1px solid var(--line); background: var(--card); color: var(--muted); font-size: 12px; }
+.allocation-summary b { color: var(--ink); }
+.backtest-note, .video-source { color: var(--muted); font-size: 12px; line-height: 1.7; }
+.backtest-note { margin: 18px 0 0; }
+.video-source { margin: -54px 0 80px; padding-top: 20px; border-top: 1px solid var(--line); }
+.video-source a { color: var(--green); font-weight: 800; }
+.video-source a:hover { text-decoration: underline; }
+
 .method { display: grid; grid-template-columns: .65fr 1.35fr; gap: 70px; padding: 70px 0 92px; border-top: 1px solid var(--ink); }
 .method ol { margin: 0; padding: 0; list-style: none; counter-reset: method; }
 .method li { counter-increment: method; position: relative; display: grid; grid-template-columns: 1fr 1.6fr; gap: 24px; padding: 24px 0 24px 55px; border-bottom: 1px solid var(--line); }
@@ -216,6 +256,11 @@ footer p { margin: 0; }
   .ma-rule { grid-template-columns: 1fr; }
   .ma-rule > i { justify-self: center; margin: -4px 0; }
   .conversion-rule { grid-template-columns: 1fr; }
+  .allocation-rule, .sop-grid { grid-template-columns: 1fr; }
+  .allocation-rule article { min-height: 0; }
+  .global-signal { grid-template-columns: auto 1fr; }
+  .global-signal p { grid-column: 1 / -1; }
+  .benchmark-grid { grid-template-columns: repeat(2, 1fr); }
   .metrics { grid-template-columns: repeat(2, 1fr); }
   .metric.primary { grid-column: span 2; }
   .threshold-block { grid-template-columns: 1fr; }
@@ -234,6 +279,7 @@ footer p { margin: 0; }
   .strategy-tabs button { grid-template-columns: auto 1fr; padding: 15px; }
   .strategy-tabs button small { display: none; }
   .strategy-tabs button strong { font-size: 16px; }
+  .strategy-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .source-card > i { display: none; }
   .form-grid, .form-grid.dates, .form-grid.compact { grid-template-columns: 1fr; }
   .section-heading > p, .run-button small { display: none; }
@@ -246,6 +292,9 @@ footer p { margin: 0; }
   .buy-summary { flex-direction: column; gap: 8px; }
   .conversion-rule { padding: 18px; }
   .conversion-rule ol { grid-template-columns: repeat(2, 1fr); }
+  .benchmark-grid { grid-template-columns: 1fr 1fr; }
+  .global-signal { grid-template-columns: 1fr; }
+  .global-signal p { grid-column: auto; }
   .method li { grid-template-columns: 1fr; gap: 8px; }
   footer { gap: 20px; flex-direction: column; }
 }
