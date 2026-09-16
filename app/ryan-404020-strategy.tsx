@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import DrawdownChart from './drawdown-chart';
 import {
   runRyan404020Backtest,
   type RyanCurvePoint,
@@ -195,6 +196,7 @@ export default function Ryan404020Strategy({ baseRows, leveragedRows, qqqRows }:
       </div>
 
       <article className="panel chart-panel"><div className="panel-title"><h3>策略與基準資產曲線</h3><span>相同起始資金；50/50 基準每年首個交易日再平衡</span></div><ComparisonChart points={result.curve} /></article>
+      <article className="panel drawdown-panel"><div className="panel-title"><h3>資產最大回撤</h3><span>40 / 40 / 20 組合每日距離歷史前高的跌幅</span></div><DrawdownChart points={result.curve.map((point) => ({ date: point.date, value: point.total }))} label="40 / 40 / 20 均線策略資產回撤" /></article>
       <div className="benchmark-grid">
         <article className="benchmark-card featured"><span>40 / 40 / 20</span><strong>{signedPct(result.cagr)}</strong><p>CAGR・MDD −{result.mdd.toFixed(2)}%</p></article>
         <article className="benchmark-card"><span>100% 0050</span><strong>{signedPct(result.comparisons.base.cagr)}</strong><p>CAGR・MDD −{result.comparisons.base.mdd.toFixed(2)}%</p></article>

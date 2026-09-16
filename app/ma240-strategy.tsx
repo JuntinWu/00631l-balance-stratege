@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import DrawdownChart from './drawdown-chart';
 import { runMa240Backtest, type Ma240CurvePoint, type Ma240Result, type Ma240Settings } from './ma240-backtest';
 import type { OhlcRow } from './price-adjustments';
 
@@ -184,6 +185,7 @@ export default function Ma240Strategy({ baseRows, leveragedRows }: { baseRows: O
         <article className="metric"><span>最大回撤 MDD</span><strong className="negative">−{result.mdd.toFixed(2)}%</strong></article>
       </div>
       <article className="panel chart-panel"><div className="panel-title"><h3>資產成長曲線</h3><span>含每月投入；灰色虛線為累計本金</span></div><PortfolioChart points={result.curve} /></article>
+      <article className="panel drawdown-panel"><div className="panel-title"><h3>資產最大回撤</h3><span>以時間加權淨值計算，排除每月新增本金影響</span></div><DrawdownChart points={result.curve.map((point) => ({ date: point.date, value: point.twr }))} label="240 年線分批轉正二資產回撤" /></article>
       <div className="two-column ma-columns">
         <article className="panel"><div className="panel-title"><h3>0050 與 240MA</h3><span>年線下的月份改買 00631L</span></div><SignalChart points={result.curve} /></article>
         <article className="panel annual-panel"><div className="panel-title"><h3>逐年報酬</h3><span>時間加權</span></div><div className="annual-list">{result.annual.map((row) => <div key={row.year}><b>{row.year}</b><span className={row.returnPct >= 0 ? 'positive' : 'negative'}>{signedPct(row.returnPct)}</span><em>{compactMoney(row.ending)}</em></div>)}</div></article>

@@ -147,6 +147,17 @@ h2, h3, p { margin-top: 0; }
 .grid-line { stroke: #dfe3da; stroke-dasharray: 3 5; }
 .grid-line.vertical { opacity: .75; }
 .axis-label { fill: #7b8981; font: 10px ui-sans-serif, sans-serif; }
+.drawdown-panel { border-color: #dfc7c2; }
+.drawdown-chart { position: relative; }
+.drawdown-chart svg { min-height: 220px; }
+.mdd-callout { display: flex; justify-content: flex-end; align-items: baseline; gap: 9px; min-height: 28px; color: var(--muted); font-size: 11px; }
+.mdd-callout strong { color: var(--red); font: 500 24px Georgia, serif; }
+.mdd-callout small { color: var(--muted); font-size: 10px; }
+.drawdown-zero { stroke: var(--ink); stroke-dasharray: none; opacity: .48; }
+.mdd-guide { stroke: var(--red); stroke-width: 1.2; stroke-dasharray: 4 5; opacity: .72; }
+.mdd-point { fill: var(--red); stroke: var(--card); stroke-width: 3; }
+.mdd-label { fill: var(--red); font: 800 11px ui-sans-serif, sans-serif; }
+.drawdown-help { margin: -5px 0 0; color: var(--muted); text-align: center; font-size: 11px; }
 .legend { display: flex; justify-content: center; gap: 20px; color: var(--muted); font-size: 11px; }
 .legend span { display: flex; align-items: center; gap: 6px; }
 .legend i { width: 8px; height: 8px; border-radius: 50%; }

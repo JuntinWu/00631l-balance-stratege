@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import DrawdownChart from './drawdown-chart';
 import Ma240Strategy from './ma240-strategy';
 import Ryan404020Strategy from './ryan-404020-strategy';
 import { adjust0050ForSplits, adjust00631LForSplits, type OhlcRow } from './price-adjustments';
@@ -471,6 +472,7 @@ export default function Home() {
           </div>
 
           <article className="panel chart-panel"><div className="panel-title"><h3>資產權益曲線</h3><span>總資產 / 00631L 部位 / 現金</span></div><LineChart points={result.curve} /></article>
+          <article className="panel drawdown-panel"><div className="panel-title"><h3>資產最大回撤</h3><span>每日總資產相對歷史前高的跌幅</span></div><DrawdownChart points={result.curve.map((point) => ({ date: point.date, value: point.total }))} label="門檻式再平衡資產回撤" /></article>
           <div className="two-column">
             <article className="panel"><div className="panel-title"><h3>00631L 占比走勢</h3><span>觸發後回到 {settings.targetPct}%</span></div><LineChart points={result.curve} ratio /></article>
             <article className="panel annual-panel"><div className="panel-title"><h3>逐年報酬</h3><span>{result.annual.length} 個年度</span></div><div className="annual-list">{result.annual.map((row) => <div key={row.year}><b>{row.year}</b><span className={row.returnPct >= 0 ? 'positive' : 'negative'}>{pct(row.returnPct)}</span><em>{compactMoney(row.ending)}</em></div>)}</div></article>
