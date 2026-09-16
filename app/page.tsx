@@ -1,7 +1,7 @@
 'use client';
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import DrawdownChart from './drawdown-chart';
+import DrawdownChart, { DrawdownMetric } from './drawdown-chart';
 import Ma240Strategy from './ma240-strategy';
 import Ryan404020Strategy from './ryan-404020-strategy';
 import { adjust0050ForSplits, adjust00631LForSplits, type OhlcRow } from './price-adjustments';
@@ -467,12 +467,12 @@ export default function Home() {
             <article className="metric primary"><span>期末資產</span><strong>{money.format(result.ending)}<small>元</small></strong><p>起始 {money.format(settings.capitalWan * 10000)} 元</p></article>
             <article className="metric"><span>總報酬率</span><strong className={result.totalReturn >= 0 ? 'positive' : 'negative'}>{pct(result.totalReturn)}</strong></article>
             <article className="metric"><span>CAGR 年化</span><strong className={result.cagr >= 0 ? 'positive' : 'negative'}>{pct(result.cagr)}</strong></article>
-            <article className="metric"><span>最大回撤 MDD</span><strong className="negative">−{result.mdd.toFixed(2)}%</strong></article>
+            <DrawdownMetric points={result.curve.map((point) => ({ date: point.date, value: point.total }))} />
             <article className="metric"><span>再平衡次數</span><strong>{Math.max(0, result.trades.length - 1)}<small>次</small></strong></article>
           </div>
 
           <article className="panel chart-panel"><div className="panel-title"><h3>資產權益曲線</h3><span>總資產 / 00631L 部位 / 現金</span></div><LineChart points={result.curve} /></article>
-          <article className="panel drawdown-panel"><div className="panel-title"><h3>資產最大回撤</h3><span>每日總資產相對歷史前高的跌幅</span></div><DrawdownChart points={result.curve.map((point) => ({ date: point.date, value: point.total }))} label="門檻式再平衡資產回撤" /></article>
+          <article className="panel drawdown-panel"><div className="panel-title"><h3>資產最大回撤</h3><span>每日總資產相對歷史前高的金額差</span></div><DrawdownChart points={result.curve.map((point) => ({ date: point.date, value: point.total }))} label="門檻式再平衡資產回撤" /></article>
           <div className="two-column">
             <article className="panel"><div className="panel-title"><h3>00631L 占比走勢</h3><span>觸發後回到 {settings.targetPct}%</span></div><LineChart points={result.curve} ratio /></article>
             <article className="panel annual-panel"><div className="panel-title"><h3>逐年報酬</h3><span>{result.annual.length} 個年度</span></div><div className="annual-list">{result.annual.map((row) => <div key={row.year}><b>{row.year}</b><span className={row.returnPct >= 0 ? 'positive' : 'negative'}>{pct(row.returnPct)}</span><em>{compactMoney(row.ending)}</em></div>)}</div></article>
