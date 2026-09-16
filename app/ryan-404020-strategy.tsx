@@ -12,6 +12,8 @@ import type { OhlcRow } from './price-adjustments';
 
 const defaults: RyanSettings = {
   initialWan: 1000,
+  rebalanceUpPct: 70,
+  rebalanceDownPct: 30,
   commissionPct: 0.1425,
   discount: 1.8,
   transactionTaxPct: 0.1,
@@ -103,6 +105,8 @@ const eventLabel = (kind: RyanResult['events'][number]['kind']) => ({
   'left-buy': '左側加碼',
   'right-buy': '右側加碼',
   reentry: '重啟正二',
+  'rebalance-buy': '門檻買進',
+  'rebalance-sell': '門檻賣出',
 }[kind]);
 
 export default function Ryan404020Strategy({ baseRows, leveragedRows, qqqRows }: { baseRows: OhlcRow[]; leveragedRows: OhlcRow[]; qqqRows: OhlcRow[] }) {
@@ -152,6 +156,7 @@ export default function Ryan404020Strategy({ baseRows, leveragedRows, qqqRows }:
         <article className="sop-card smile"><b>承接</b><h3>年線下只買 0050</h3><p>向下穿越 −8 / −10 / −15 / −20 / −25 / −30%，各投入 5%；反彈向上收復同階梯，各投入 2%。</p></article>
         <article className="sop-card rally"><b>反攻</b><h3>+3% 連 3 日，或單日 +5%</h3><p>賣出底部承接的 0050，連同剩餘備戰金全數買回 00631L；40% 底倉與 20% 保命金不動。</p></article>
       </div>
+      <div className="global-signal threshold-signal"><span>門檻再平衡</span><strong>正二跨越門檻後調回 40%</strong><p>沿用策略 01 的價格門檻邏輯；賣出資金進入備戰現金，買進只使用備戰現金，不動 0050 底倉與 20% 保命現金。</p></div>
       <div className="global-signal"><span>跨市場保險</span><strong>QQQ 跌破自身 240MA −10%</strong><p>無論 0050 當下位置，00631L 一律清倉；QQQ 訊號解除前不重啟正二。台股交易日只讀取當時已公布的最近一筆 QQQ 收盤，不使用 QLD。</p></div>
       <p className="ma-principle"><b>防禦 W 底：</b>每個循環中，每個左側與右側階梯各只觸發一次；跌破 −30% 後不再新增更深的加碼點。</p>
     </section>
@@ -172,6 +177,15 @@ export default function Ryan404020Strategy({ baseRows, leveragedRows, qqqRows }:
           <label className="field"><span>初始投資部位</span><div className="input-shell fixed-value"><strong>80</strong><b>%</b></div></label>
           <label className="field"><span>鎖定保命現金</span><div className="input-shell fixed-value"><strong>20</strong><b>%</b></div></label>
         </div>
+      </div>
+      <div className="setting-block">
+        <h3>00631L 門檻再平衡</h3>
+        <div className="form-grid">
+          <RyanField label="上漲門檻" suffix="%" value={settings.rebalanceUpPct} onChange={setNumber('rebalanceUpPct')} min={0.1} step={0.1} />
+          <RyanField label="下跌門檻" suffix="%" value={settings.rebalanceDownPct} onChange={setNumber('rebalanceDownPct')} min={0.1} step={0.1} />
+          <label className="field"><span>正二目標比例</span><div className="input-shell fixed-value"><strong>40</strong><b>%</b></div></label>
+        </div>
+        <p className="setting-help">以每次觸發價作為新基準；多頭模式下跨越門檻即調整，240MA 撤退時仍會全數出清正二。</p>
       </div>
       <details className="costs">
         <summary>交易成本設定 <span>買進 {(settings.commissionPct * settings.discount / 10).toFixed(4)}%・賣出另計 ETF 稅 {settings.transactionTaxPct}%</span></summary>
@@ -210,18 +224,18 @@ export default function Ryan404020Strategy({ baseRows, leveragedRows, qqqRows }:
       </div>
 
       <div className="allocation-summary">
-        <span>撤退 <b>{result.exitCount} 次</b></span><span>其中 QQQ 強制撤退 <b>{result.qqqExitCount} 次</b></span><span>重啟正二 <b>{result.reentryCount} 次</b></span><span>左側加碼 <b>{result.leftBuyCount} 次</b></span><span>右側加碼 <b>{result.rightBuyCount} 次</b></span>
+        <span>門檻再平衡 <b>{result.rebalanceCount} 次</b></span><span>撤退 <b>{result.exitCount} 次</b></span><span>其中 QQQ 強制撤退 <b>{result.qqqExitCount} 次</b></span><span>重啟正二 <b>{result.reentryCount} 次</b></span><span>左側加碼 <b>{result.leftBuyCount} 次</b></span><span>右側加碼 <b>{result.rightBuyCount} 次</b></span>
         <span>期末：0050 底倉 <b>{result.endingWeights.core.toFixed(1)}%</b>・底部 0050 <b>{result.endingWeights.tacticalBase.toFixed(1)}%</b>・00631L <b>{result.endingWeights.leveraged.toFixed(1)}%</b>・現金 <b>{(result.endingWeights.reserve + result.endingWeights.tacticalCash).toFixed(1)}%</b></span>
       </div>
 
       <details className="panel trade-panel" open>
         <summary><span>策略事件明細</span><b>{result.events.length} 筆</b></summary>
-        <div className="table-wrap"><table><thead><tr><th>日期</th><th>事件</th><th>訊號</th><th>0050 乖離</th><th>0050</th><th>00631L</th><th>交易金額</th></tr></thead><tbody>{result.events.map((event, index) => <tr key={`${event.date}-${event.kind}-${index}`}><td>{event.date.replaceAll('-', '/')}</td><td className={event.kind === 'exit' ? 'sell' : event.kind === 'reentry' ? 'leverage-buy' : 'buy'}>{eventLabel(event.kind)}</td><td>{event.signal}</td><td className={event.deviationPct >= 0 ? 'positive' : 'negative'}>{signedPct(event.deviationPct)}</td><td>{event.basePrice.toFixed(2)}</td><td>{event.leveragedPrice.toFixed(2)}</td><td>{money.format(event.amount)} 元</td></tr>)}</tbody></table></div>
+        <div className="table-wrap"><table><thead><tr><th>日期</th><th>事件</th><th>訊號</th><th>0050 乖離</th><th>0050</th><th>00631L</th><th>交易金額</th></tr></thead><tbody>{result.events.map((event, index) => <tr key={`${event.date}-${event.kind}-${index}`}><td>{event.date.replaceAll('-', '/')}</td><td className={event.kind === 'exit' || event.kind === 'rebalance-sell' ? 'sell' : event.kind === 'reentry' || event.kind === 'rebalance-buy' ? 'leverage-buy' : 'buy'}>{eventLabel(event.kind)}</td><td>{event.signal}</td><td className={event.deviationPct >= 0 ? 'positive' : 'negative'}>{signedPct(event.deviationPct)}</td><td>{event.basePrice.toFixed(2)}</td><td>{event.leveragedPrice.toFixed(2)}</td><td>{money.format(event.amount)} 元</td></tr>)}</tbody></table></div>
       </details>
       <p className="backtest-note">資料範圍受 00631L 上市日限制；0050 與 00631L 價格已還原 ETF 分割，QQQ 日線來自 Yahoo Finance。未納入股息再投入、匯率、現金利息與滑價。歷史績效不代表未來報酬。</p>
     </section>}
 
-    <section className="method" id="ryan-method"><div><span>03</span><h2>回測口徑</h2></div><ol><li><b>固定底倉與保命金</b><p>起始以 40% 買 0050、40% 買 00631L、20% 留現金；底倉與保命金不參與換倉。</p></li><li><b>收盤確認、次日成交</b><p>單日 ±5% 訊號以當日收盤成交；連續三日 ±3% 訊號於下一個共同交易日開盤成交，避免偷看未來。</p></li><li><b>QQQ 採已知資訊</b><p>每個台股交易日使用日期早於該日、最近一筆可得的 QQQ 收盤與 240MA；低於 −10% 時清空 00631L，未解除時不重新進場。</p></li><li><b>微笑曲線按循環控管</b><p>正二撤退後，以撤退當下總資產為階梯金額基準；左側每階 5%、右側每階 2%，各方向同一階只買一次，且以可用備戰金為上限。</p></li><li><b>基準保持可比較</b><p>0050 與 00631L 基準皆為起始一次買進；50/50 基準每年首個交易日調回正二與現金各半，三者均計入相同交易成本。</p></li></ol></section>
+    <section className="method" id="ryan-method"><div><span>03</span><h2>回測口徑</h2></div><ol><li><b>固定底倉與保命金</b><p>起始以 40% 買 0050、40% 買 00631L、20% 留現金；底倉與保命金不參與換倉。</p></li><li><b>門檻再平衡</b><p>多頭模式下，00631L 相對前次基準價跨越設定漲跌幅時，將正二調回總資產 40%；賣出進入備戰現金，買進不動用保命現金。</p></li><li><b>收盤確認、次日成交</b><p>單日 ±5% 訊號以當日收盤成交；連續三日 ±3% 訊號於下一個共同交易日開盤成交，避免偷看未來。</p></li><li><b>QQQ 採已知資訊</b><p>每個台股交易日使用日期早於該日、最近一筆可得的 QQQ 收盤與 240MA；低於 −10% 時清空 00631L，未解除時不重新進場。</p></li><li><b>微笑曲線按循環控管</b><p>正二撤退後，以撤退當下總資產為階梯金額基準；左側每階 5%、右側每階 2%，各方向同一階只買一次，且以可用備戰金為上限。</p></li><li><b>基準保持可比較</b><p>0050 與 00631L 基準皆為起始一次買進；50/50 基準每年首個交易日調回正二與現金各半，三者均計入相同交易成本。</p></li></ol></section>
     <p className="video-source">策略規則整理自 YouTube 頻道「上班靠工資下班靠投資」：<a href="https://www.youtube.com/watch?v=gHrSgY-fUp4" target="_blank" rel="noreferrer">觀看原始影片 ↗</a></p>
   </div>;
 }

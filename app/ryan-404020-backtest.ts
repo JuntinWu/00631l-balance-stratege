@@ -2,6 +2,8 @@ import type { OhlcRow } from './price-adjustments';
 
 export type RyanSettings = {
   initialWan: number;
+  rebalanceUpPct: number;
+  rebalanceDownPct: number;
   commissionPct: number;
   discount: number;
   transactionTaxPct: number;
@@ -9,7 +11,7 @@ export type RyanSettings = {
 
 export type RyanEvent = {
   date: string;
-  kind: 'initial' | 'exit' | 'left-buy' | 'right-buy' | 'reentry';
+  kind: 'initial' | 'exit' | 'left-buy' | 'right-buy' | 'reentry' | 'rebalance-buy' | 'rebalance-sell';
   signal: string;
   action: string;
   deviationPct: number;
@@ -57,6 +59,7 @@ export type RyanResult = {
   leftBuyCount: number;
   rightBuyCount: number;
   qqqExitCount: number;
+  rebalanceCount: number;
   endingWeights: { core: number; tacticalBase: number; leveraged: number; reserve: number; tacticalCash: number };
   comparisons: {
     base: { ending: number; cagr: number; mdd: number };
@@ -68,6 +71,8 @@ export type RyanResult = {
 type SignalRow = OhlcRow & {
   movingAverage: number;
   leveragedOpen: number;
+  leveragedHigh: number;
+  leveragedLow: number;
   leveragedClose: number;
   qqqClose: number;
   qqqMovingAverage: number;
@@ -103,6 +108,8 @@ function buildSignals(baseRows: OhlcRow[], leveragedRows: OhlcRow[], qqqRows: Oh
       ...base,
       movingAverage: rollingSum / 240,
       leveragedOpen: leveraged.open,
+      leveragedHigh: leveraged.high,
+      leveragedLow: leveraged.low,
       leveragedClose: leveraged.close,
       qqqClose: qqq.close,
       qqqMovingAverage: qqq.movingAverage,
@@ -157,6 +164,7 @@ export function runRyan404020Backtest(
   const reserve = initial * 0.2;
   let tacticalCash = 0;
   let mode: 'leveraged' | 'defensive' = 'leveraged';
+  let leveragedReference = first.leveragedClose;
   let cycleAnchor = initial;
   let previousDeviation = (first.close / first.movingAverage - 1) * 100;
   let belowThreeStreak = 0;
@@ -213,6 +221,7 @@ export function runRyan404020Backtest(
     leveragedShares += buyShares(spend, leveragedPrice);
     tacticalCash = 0;
     mode = 'leveraged';
+    leveragedReference = leveragedPrice;
     belowThreeStreak = 0;
     pendingReentry = false;
     events.push({
@@ -227,10 +236,53 @@ export function runRyan404020Backtest(
     });
   };
 
+  const rebalanceLeveraged = (row: SignalRow, basePrice: number, leveragedPrice: number, checkpoint: string) => {
+    const leveragedValue = leveragedShares * leveragedPrice;
+    const total = coreShares * basePrice + tacticalBaseShares * basePrice + leveragedValue + reserve + tacticalCash;
+    const targetValue = total * 0.4;
+    let kind: RyanEvent['kind'] | null = null;
+    let action = '';
+    let amount = 0;
+
+    if (leveragedValue > targetValue) {
+      const grossSale = Math.min(leveragedValue, (leveragedValue - targetValue) / (1 - 0.4 * sellCost));
+      const sharesToSell = grossSale / leveragedPrice;
+      leveragedShares -= sharesToSell;
+      tacticalCash += saleProceeds(sharesToSell, leveragedPrice);
+      kind = 'rebalance-sell';
+      action = '賣出 00631L，獲利轉入備戰現金';
+      amount = grossSale;
+    } else if (leveragedValue < targetValue && tacticalCash > 0) {
+      const gap = targetValue - leveragedValue;
+      const spend = Math.min(tacticalCash, gap * (1 + buyFee) / (1 + 0.4 * buyFee));
+      leveragedShares += buyShares(spend, leveragedPrice);
+      tacticalCash -= spend;
+      kind = 'rebalance-buy';
+      action = '使用備戰現金買進 00631L';
+      amount = spend;
+    }
+
+    const changePct = (leveragedPrice / leveragedReference - 1) * 100;
+    leveragedReference = leveragedPrice;
+    if (!kind || amount <= 0) return;
+    events.push({
+      date: row.date,
+      kind,
+      signal: `${checkpoint}相對前次基準 ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%，正二調回總資產 40%`,
+      action,
+      deviationPct: (row.close / row.movingAverage - 1) * 100,
+      basePrice,
+      leveragedPrice,
+      amount,
+    });
+  };
+
   for (let index = 0; index < signals.length; index += 1) {
     const row = signals[index];
     const deviationPct = (row.close / row.movingAverage - 1) * 100;
     const qqqDeviationPct = (row.qqqClose / row.qqqMovingAverage - 1) * 100;
+    const rebalanceUp = Math.max(0.001, settings.rebalanceUpPct) / 100;
+    const rebalanceDown = Math.max(0.001, settings.rebalanceDownPct) / 100;
 
     if (index > 0 && mode === 'leveraged' && pendingExit) {
       exitLeveraged(row, row.leveragedOpen, '連續 3 日低於年線 −3%，第 4 日開盤撤退');
@@ -238,6 +290,20 @@ export function runRyan404020Backtest(
       reenterLeveraged(row, row.open, row.leveragedOpen, '連續 3 日高於年線 +3%，次日開盤反攻');
     } else if (mode === 'defensive' && pendingReentry && qqqDeviationPct <= -10) {
       pendingReentry = false;
+    }
+
+    if (index > 0 && mode === 'leveraged') {
+      const checkpoints = [
+        ['開盤', row.open, row.leveragedOpen],
+        ['盤中最高價', row.high, row.leveragedHigh],
+        ['盤中最低價', row.low, row.leveragedLow],
+      ] as const;
+      for (const [label, basePrice, leveragedPrice] of checkpoints) {
+        if (leveragedPrice >= leveragedReference * (1 + rebalanceUp)
+          || leveragedPrice <= leveragedReference * (1 - rebalanceDown)) {
+          rebalanceLeveraged(row, basePrice, leveragedPrice, label);
+        }
+      }
     }
 
     if (mode === 'leveraged') {
@@ -248,6 +314,10 @@ export function runRyan404020Backtest(
         exitLeveraged(row, row.leveragedClose, '單日收盤低於年線 −5%，立即撤退');
       } else if (belowThreeStreak >= 3) {
         pendingExit = true;
+      }
+      if (mode === 'leveraged' && (row.leveragedClose >= leveragedReference * (1 + rebalanceUp)
+        || row.leveragedClose <= leveragedReference * (1 - rebalanceDown))) {
+        rebalanceLeveraged(row, row.close, row.leveragedClose, '收盤');
       }
     }
 
@@ -369,6 +439,7 @@ export function runRyan404020Backtest(
     leftBuyCount: events.filter((event) => event.kind === 'left-buy').length,
     rightBuyCount: events.filter((event) => event.kind === 'right-buy').length,
     qqqExitCount: events.filter((event) => event.kind === 'exit' && event.signal.startsWith('QQQ')).length,
+    rebalanceCount: events.filter((event) => event.kind === 'rebalance-buy' || event.kind === 'rebalance-sell').length,
     endingWeights: {
       core: weight(endingPoint.coreBase),
       tacticalBase: weight(endingPoint.tacticalBase),

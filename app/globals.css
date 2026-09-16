@@ -231,6 +231,9 @@ td.above { color: var(--green); font-weight: 800; }
 .global-signal span { padding: 6px 9px; background: #76381e; color: white; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
 .global-signal strong { font: 500 19px Georgia, "Noto Serif TC", serif; }
 .global-signal p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.global-signal.threshold-signal { border-color: #8ab7a8; background: #edf8f3; }
+.global-signal.threshold-signal span { background: var(--green); }
+.setting-help { margin: 14px 0 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
 .benchmark-grid { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 22px; border: 1px solid var(--ink); background: var(--ink); gap: 1px; }
 .benchmark-card { min-height: 132px; padding: 20px; background: var(--card); }
 .benchmark-card.featured { background: var(--lime); }
