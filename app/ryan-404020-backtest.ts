@@ -163,7 +163,8 @@ export function runRyan404020Backtest(
   let tacticalBaseShares = 0;
   const reserve = initial * 0.2;
   let tacticalCash = 0;
-  let mode: 'leveraged' | 'defensive' = 'leveraged';
+  // 用型別斷言避免 TS 把 mode 縮窄成初始值；mode 會在 exitLeveraged/reenterLeveraged 閉包內被改變。
+  let mode = 'leveraged' as 'leveraged' | 'defensive';
   let leveragedReference = first.leveragedClose;
   let cycleAnchor = initial;
   let previousDeviation = (first.close / first.movingAverage - 1) * 100;

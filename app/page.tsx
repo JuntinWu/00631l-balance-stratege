@@ -48,6 +48,9 @@ const defaultSettings: Settings = {
   downPct: 30,
 };
 
+// GitHub Pages 部署在 /<repo> 子路徑下，靜態資料要加上 basePath。
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+
 const money = new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 0 });
 const pct = (value: number) => `${value < 0 ? '' : '+'}${value.toFixed(2)}%`;
 const compactMoney = (value: number) => {
@@ -302,7 +305,7 @@ export default function Home() {
   }, [data, endDate, settings, startDate]);
 
   useEffect(() => {
-    Promise.all([fetch('/data/00631L.json'), fetch('/data/0050.json'), fetch('/data/QQQ.json')])
+    Promise.all(['00631L', '0050', 'QQQ'].map((name) => fetch(`${BASE_PATH}/data/${name}.json`)))
       .then(async ([leveragedResponse, baseResponse, qqqResponse]) => {
         if (!leveragedResponse.ok || !baseResponse.ok || !qqqResponse.ok) throw new Error('資料載入失敗');
         const [rawLeveraged, rawBase, qqq] = await Promise.all([
