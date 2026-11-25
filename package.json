@@ -11,6 +11,7 @@
     "start": "vinext start",
     "test:split": "node --experimental-strip-types scripts/check-split-adjustment.mjs",
     "test:strategy": "npm run test:split && node --experimental-strip-types scripts/check-ma240-strategy.mjs && node --experimental-strip-types scripts/check-ryan-404020-strategy.mjs",
+    "update:00631l": "node scripts/update-00631l-data.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {
