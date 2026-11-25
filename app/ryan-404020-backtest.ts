@@ -299,10 +299,19 @@ export function runRyan404020Backtest(
         ['盤中最低價', row.low, row.leveragedLow],
       ] as const;
       for (const [label, basePrice, leveragedPrice] of checkpoints) {
-        if (leveragedPrice >= leveragedReference * (1 + rebalanceUp)
-          || leveragedPrice <= leveragedReference * (1 - rebalanceDown)) {
+        const upLevel = leveragedReference * (1 + rebalanceUp);
+        const downLevel = leveragedReference * (1 - rebalanceDown);
+        const isUp = leveragedPrice >= upLevel;
+        if (!isUp && leveragedPrice > downLevel) continue;
+        if (label === '開盤') {
           rebalanceLeveraged(row, basePrice, leveragedPrice, label);
+          continue;
         }
+        // 盤中觸及門檻時以門檻價成交，不假設賣在最高、買在最低。
+        // 0050 在同一時點的價格無法得知，用「正二約為兩倍日報酬」從開盤價推估，只用於計算總資產。
+        const fill = Math.min(row.leveragedHigh, Math.max(row.leveragedLow, isUp ? upLevel : downLevel));
+        const estimatedBase = row.open * (1 + (fill / row.leveragedOpen - 1) / 2);
+        rebalanceLeveraged(row, Math.min(row.high, Math.max(row.low, estimatedBase)), fill, label);
       }
     }
 

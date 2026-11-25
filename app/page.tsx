@@ -124,21 +124,27 @@ function runBacktest(rows: PriceRow[], settings: Settings): Result {
       ['收盤觸發', row.close],
     ];
     for (const [label, price] of checkpoints) {
-      const isUp = price >= reference * (1 + up);
-      const isDown = price <= reference * (1 - down);
+      const upLevel = reference * (1 + up);
+      const downLevel = reference * (1 - down);
+      const isUp = price >= upLevel;
+      const isDown = price <= downLevel;
       if (!isUp && !isDown) continue;
-      const next = rebalance(shares, cash, price, target, buyFee, sellFee);
+      // 開盤跳空越過門檻，只能用開盤價成交；盤中才觸及門檻，則以門檻價成交（等同掛限價單），
+      // 避免假設每次都剛好賣在最高價、買在最低價。
+      const level = isUp ? upLevel : downLevel;
+      const fill = label === '開盤觸發' ? price : Math.min(row.high, Math.max(row.low, level));
+      const next = rebalance(shares, cash, fill, target, buyFee, sellFee);
       shares = next.shares;
       cash = next.cash;
-      reference = price;
-      const total = shares * price + cash;
+      reference = fill;
+      const total = shares * fill + cash;
       trades.push({
         date: row.date,
         trigger: label,
-        reference: price,
+        reference: fill,
         action: next.action,
         amount: next.amount,
-        ratio: total ? (shares * price * 100) / total : 0,
+        ratio: total ? (shares * fill * 100) / total : 0,
       });
     }
     const asset = shares * row.close;
@@ -416,7 +422,7 @@ export default function Home() {
           </div>
           <p className="data-footnote">
             {splitAdjusted && <span className="adjusted-badge">✓ 已還原 2026/03/31 的 22：1 分割</span>}
-            資料來源：FinMind TaiwanStockPrice 公開資料集。回測結果僅供研究，不構成投資建議。
+            資料來源：FinMind 公開資料集，已依除息結果還原股價（現金股利於除息日再投入）。回測結果僅供研究，不構成投資建議。
           </p>
         </section>
 
@@ -458,7 +464,7 @@ export default function Home() {
             </div>
           </details>
           {error && <p className="error" role="alert">{error}</p>}
-          <button className="run-button" onClick={() => execute()} disabled={!data.length}><span>▶</span>執行門檻回測<small>以開盤 → 最高 → 最低 → 收盤順序檢查</small></button>
+          <button className="run-button" onClick={() => execute()} disabled={!data.length}><span>▶</span>執行門檻回測<small>開盤跳空以開盤價、盤中觸及以門檻價成交</small></button>
         </section>
 
         {result && <section className="results" id="results" ref={resultRef}>
@@ -483,7 +489,7 @@ export default function Home() {
           </details>
         </section>}
 
-        <section className="method" id="method"><div><span>03</span><h2>計算方式</h2></div><ol><li><b>起始建倉</b><p>依目標比例買入 00631L，其餘保留現金。</p></li><li><b>逐日檢查</b><p>依開盤、最高、最低、收盤順序，比對上次觸發價。</p></li><li><b>觸發再平衡</b><p>跨越門檻就買賣至目標比例，並重設參考價。</p></li></ol></section>
+        <section className="method" id="method"><div><span>03</span><h2>計算方式</h2></div><ol><li><b>起始建倉</b><p>依目標比例買入 00631L，其餘保留現金。</p></li><li><b>逐日檢查</b><p>依開盤、最高、最低、收盤順序，比對上次觸發價。</p></li><li><b>觸發再平衡</b><p>跨越門檻就買賣至目標比例，並以成交價重設參考價。開盤跳空以開盤價成交，盤中觸及則以門檻價成交。</p></li></ol></section>
         </> : activeStrategy === 'ma240'
           ? <Ma240Strategy baseRows={baseData} leveragedRows={builtinData} />
           : <Ryan404020Strategy baseRows={baseData} leveragedRows={builtinData} qqqRows={qqqData} />}
