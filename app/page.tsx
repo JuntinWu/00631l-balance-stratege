@@ -1,9 +1,11 @@
 'use client';
 
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import LineChart, { compactMoney, type AssetCurvePoint } from './asset-chart';
 import DrawdownChart, { DrawdownMetric } from './drawdown-chart';
 import Ma240Strategy from './ma240-strategy';
 import Ryan404020Strategy from './ryan-404020-strategy';
+import WeeklyStrategy from './weekly-strategy';
 import { adjust0050ForSplits, adjust00631LForSplits, type OhlcRow } from './price-adjustments';
 
 type PriceRow = OhlcRow;
@@ -16,7 +18,7 @@ type Settings = {
   upPct: number;
   downPct: number;
 };
-type CurvePoint = { date: string; total: number; asset: number; cash: number; ratio: number };
+type CurvePoint = AssetCurvePoint;
 type Trade = {
   date: string;
   trigger: string;
@@ -53,11 +55,6 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 
 const money = new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 0 });
 const pct = (value: number) => `${value < 0 ? '' : '+'}${value.toFixed(2)}%`;
-const compactMoney = (value: number) => {
-  if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(1)}億`;
-  if (value >= 10_000) return `${Math.round(value / 10_000)}萬`;
-  return money.format(value);
-};
 
 function rebalance(
   shares: number,
@@ -182,70 +179,6 @@ function runBacktest(rows: PriceRow[], settings: Settings): Result {
   };
 }
 
-function LineChart({ points, ratio = false }: { points: CurvePoint[]; ratio?: boolean }) {
-  const width = 1080;
-  const height = 310;
-  const pad = { left: 66, right: 20, top: 22, bottom: 42 };
-  const plotW = width - pad.left - pad.right;
-  const plotH = height - pad.top - pad.bottom;
-  const sampled = useMemo(() => {
-    if (points.length <= 720) return points;
-    const step = Math.ceil(points.length / 720);
-    return points.filter((_, i) => i % step === 0 || i === points.length - 1);
-  }, [points]);
-  const series = ratio
-    ? [{ key: 'ratio' as const, color: '#62e6ba', name: '00631L占比' }]
-    : [
-        { key: 'total' as const, color: '#ffd166', name: '總資產' },
-        { key: 'asset' as const, color: '#62e6ba', name: '00631L部位' },
-        { key: 'cash' as const, color: '#9fb3d7', name: '現金' },
-      ];
-  const max = ratio ? 100 : Math.max(...points.flatMap((p) => [p.total, p.asset, p.cash]), 1);
-  const x = (i: number) => pad.left + (i / Math.max(1, sampled.length - 1)) * plotW;
-  const y = (value: number) => pad.top + (1 - value / Math.max(1, max)) * plotH;
-  const path = (key: 'total' | 'asset' | 'cash' | 'ratio') =>
-    sampled.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ');
-  const ticks = [0, 0.25, 0.5, 0.75, 1];
-  const dateTicks = ticks.map((n) => Math.min(sampled.length - 1, Math.round(n * (sampled.length - 1))));
-
-  if (!points.length) return null;
-  return (
-    <div className="chart-wrap">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={ratio ? '00631L占比走勢圖' : '資產權益曲線'}>
-        {ticks.map((t) => (
-          <g key={t}>
-            <line x1={pad.left} x2={width - pad.right} y1={y(max * t)} y2={y(max * t)} className="grid-line" />
-            <text x={pad.left - 12} y={y(max * t) + 4} textAnchor="end" className="axis-label">
-              {ratio ? `${Math.round(t * 100)}%` : compactMoney(max * t)}
-            </text>
-          </g>
-        ))}
-        {dateTicks.map((index) => (
-          <g key={`${index}-${sampled[index]?.date}`}>
-            <line x1={x(index)} x2={x(index)} y1={pad.top} y2={height - pad.bottom} className="grid-line vertical" />
-            <text x={x(index)} y={height - 14} textAnchor="middle" className="axis-label">
-              {sampled[index]?.date.slice(0, 7).replace('-', '/')}
-            </text>
-          </g>
-        ))}
-        {!ratio && (
-          <path d={`${path('total')} L${width - pad.right},${height - pad.bottom} L${pad.left},${height - pad.bottom} Z`} fill="url(#area)" />
-        )}
-        <defs>
-          <linearGradient id="area" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#ffd166" stopOpacity="0.22" />
-            <stop offset="1" stopColor="#ffd166" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {series.map((item) => <path key={item.key} d={path(item.key)} fill="none" stroke={item.color} strokeWidth="2.5" strokeLinejoin="round" />)}
-      </svg>
-      <div className="legend">
-        {series.map((item) => <span key={item.key}><i style={{ background: item.color }} />{item.name}</span>)}
-      </div>
-    </div>
-  );
-}
-
 function Field({ label, suffix, children }: { label: string; suffix?: string; children: React.ReactNode }) {
   return <label className="field"><span>{label}</span><div className="input-shell">{children}{suffix && <b>{suffix}</b>}</div></label>;
 }
@@ -279,7 +212,7 @@ export default function Home() {
   const [builtinData, setBuiltinData] = useState<PriceRow[]>([]);
   const [baseData, setBaseData] = useState<PriceRow[]>([]);
   const [qqqData, setQqqData] = useState<PriceRow[]>([]);
-  const [activeStrategy, setActiveStrategy] = useState<'threshold' | 'ma240' | 'ryan404020'>('threshold');
+  const [activeStrategy, setActiveStrategy] = useState<'threshold' | 'ma240' | 'ryan404020' | 'weekly'>('threshold');
   const [dataName, setDataName] = useState('尚未選擇檔案');
   const [isCustom, setIsCustom] = useState(false);
   const [splitAdjusted, setSplitAdjusted] = useState(false);
@@ -372,11 +305,18 @@ export default function Home() {
     setSettings((value) => ({ ...value, [key]: Number(event.target.value) }));
   };
   const filteredCount = data.filter((row) => row.date >= startDate && row.date <= endDate).length;
-  const navTargets = activeStrategy === 'threshold'
-    ? ['#settings', '#results', '#method']
-    : activeStrategy === 'ma240'
-      ? ['#ma-settings', '#ma-results', '#ma-method']
-      : ['#ryan-settings', '#ryan-results', '#ryan-method'];
+  const navTargets = {
+    threshold: ['#settings', '#results', '#method'],
+    ma240: ['#ma-settings', '#ma-results', '#ma-method'],
+    ryan404020: ['#ryan-settings', '#ryan-results', '#ryan-method'],
+    weekly: ['#weekly-settings', '#weekly-results', '#weekly-method'],
+  }[activeStrategy];
+  const hero = {
+    threshold: ['00631L × 現金', '當價格跨越設定門檻，自動將 00631L 與現金調回目標比例。用歷史資料快速檢視報酬、回撤與每次交易。'],
+    ma240: ['0050 240MA × 回撤階梯', '新資金依 0050 的 240 日均線選擇標的；既有 0050 遇到回撤時，再分四階段逐步轉成 00631L。'],
+    ryan404020: ['0050 × 00631L × QQQ 風險訊號', '用 40% 0050 打底、40% 00631L 進攻、20% 現金保命；以 0050 年線控制進退，再用 QQQ 年線乖離補上跨市場風險保險。'],
+    weekly: ['0050 20 週均線 × 00631L', '0050 週收盤跌破 20 週均線，下一週開盤賣出一半的 00631L。防守期間按跌幅分批加碼 00631L。'],
+  }[activeStrategy];
 
   return (
     <main>
@@ -389,21 +329,24 @@ export default function Home() {
       <div className="page" id="top">
         <section className="hero">
           <div>
-            <p className="eyebrow">{activeStrategy === 'threshold' ? '00631L × 現金' : activeStrategy === 'ma240' ? '0050 240MA × 回撤階梯' : '0050 × 00631L × QQQ 風險訊號'}</p>
+            <p className="eyebrow">{hero[0]}</p>
             <h1>00631L<br /><em>回測策略</em></h1>
-            <p className="hero-copy">{activeStrategy === 'threshold' ? '當價格跨越設定門檻，自動將 00631L 與現金調回目標比例。用歷史資料快速檢視報酬、回撤與每次交易。' : activeStrategy === 'ma240' ? '新資金依 0050 的 240 日均線選擇標的；既有 0050 遇到回撤時，再分四階段逐步轉成 00631L。' : '用 40% 0050 打底、40% 00631L 進攻、20% 現金保命；以 0050 年線控制進退，再用 QQQ 年線乖離補上跨市場風險保險。'}</p>
+            <p className="hero-copy">{hero[1]}</p>
           </div>
           {activeStrategy === 'threshold'
             ? <div className="hero-note"><span>規則</span><strong>漲到上門檻</strong><b>賣出正二</b><hr /><strong>跌到下門檻</strong><b>買進正二</b></div>
             : activeStrategy === 'ma240'
               ? <div className="hero-note ma-note"><span>雙重規則</span><strong>新資金看 240MA</strong><b>線上 0050／線下 00631L</b><hr /><strong>既有 0050 看回撤</strong><b>−10% 至 −25% 分批轉正二</b></div>
-              : <div className="hero-note ryan-note"><span>40 / 40 / 20</span><strong>年線失守，正二撤退</strong><b>年線之下只承接 0050</b><hr /><strong>QQQ 低於年線 −10%</strong><b>跨市場強制清倉</b></div>}
+              : activeStrategy === 'ryan404020'
+                ? <div className="hero-note ryan-note"><span>40 / 40 / 20</span><strong>年線失守，正二撤退</strong><b>年線之下只承接 0050</b><hr /><strong>QQQ 低於年線 −10%</strong><b>跨市場強制清倉</b></div>
+                : <div className="hero-note ma-note"><span>20 週均線</span><strong>跌破週線，正二減半</strong><hr /><strong>每階加碼 5%</strong><b>最多六階，合計 30%</b></div>}
         </section>
 
         <div className="strategy-tabs" role="tablist" aria-label="選擇回測策略">
           <button role="tab" aria-selected={activeStrategy === 'threshold'} className={activeStrategy === 'threshold' ? 'active' : ''} onClick={() => setActiveStrategy('threshold')}><span>01</span><strong>門檻式再平衡</strong><small>價格漲跌觸發</small></button>
           <button role="tab" aria-selected={activeStrategy === 'ma240'} className={activeStrategy === 'ma240' ? 'active' : ''} onClick={() => setActiveStrategy('ma240')}><span>02</span><strong>240 年線＋分批轉正二</strong><small>新資金擇標的・回撤換倉</small></button>
           <button role="tab" aria-selected={activeStrategy === 'ryan404020'} className={activeStrategy === 'ryan404020' ? 'active' : ''} onClick={() => setActiveStrategy('ryan404020')}><span>03</span><strong>40 / 40 / 20 均線策略</strong><small>正二進退・微笑曲線・QQQ 保險</small></button>
+          <button role="tab" aria-selected={activeStrategy === 'weekly'} className={activeStrategy === 'weekly' ? 'active' : ''} onClick={() => setActiveStrategy('weekly')}><span>04</span><strong>20 週均線＋階梯加碼</strong><small>正二半倉防守</small></button>
         </div>
 
         {activeStrategy === 'threshold' ? <>
@@ -495,7 +438,9 @@ export default function Home() {
         <section className="method" id="method"><div><span>03</span><h2>計算方式</h2></div><ol><li><b>起始建倉</b><p>依目標比例買入 00631L，其餘保留現金。</p></li><li><b>逐日檢查</b><p>依開盤、最高、最低、收盤順序，比對上次觸發價。</p></li><li><b>觸發再平衡</b><p>跨越門檻就買賣至目標比例，並以成交價重設參考價。開盤跳空以開盤價成交，盤中觸及則以門檻價成交。</p></li></ol></section>
         </> : activeStrategy === 'ma240'
           ? <Ma240Strategy baseRows={baseData} leveragedRows={builtinData} />
-          : <Ryan404020Strategy baseRows={baseData} leveragedRows={builtinData} qqqRows={qqqData} />}
+          : activeStrategy === 'ryan404020'
+            ? <Ryan404020Strategy baseRows={baseData} leveragedRows={builtinData} qqqRows={qqqData} />
+            : <WeeklyStrategy baseRows={baseData} leveragedRows={builtinData} />}
       </div>
       <footer><span>00631L 回測策略</span><p>所有計算皆在瀏覽器本機完成・歷史績效不代表未來報酬</p></footer>
     </main>
