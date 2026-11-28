@@ -61,5 +61,21 @@ const lastPoint = ret.curve.at(-1);
 assert.ok(Math.abs(lastPoint.cash / lastPoint.total - 1 / 3) < 0.12, 'cash+00865B sleeve near 1/3');
 console.log(`PASS 退休期: ${ret.retiredAt} 退休（資產 ${Math.round(ret.retiredTotal / 1e4)} 萬），提領合計 ${Math.round(ret.withdrawn / 1e4)} 萬，期末 ${Math.round(ret.ending / 1e4)} 萬，XIRR ${ret.annualized.toFixed(2)}%（0050 ${ret.benchAnnualized.toFixed(2)}%）`);
 
+// ── 各半＋退休：退休當天與每次年底再平衡後，00631L 與 00685L 市值各占正二一半 ──
+const halfRet = runAliang73Backtest(prices, { ...settings, legMode: 'half', retire: { ...retireOff, enabled: true } });
+assert.ok(halfRet.retiredAt);
+const rebalanceDates = halfRet.trades.filter((t) => t.label.startsWith('達 20 倍') || t.label.startsWith('年底提領')).map((t) => t.date);
+assert.ok(rebalanceDates.length >= 3, 'expect several year-end rebalances');
+for (const date of rebalanceDates) {
+  const p = halfRet.curve.find((point) => point.date === date);
+  const share = p.l631 / (p.l631 + p.l685);
+  assert.ok(Math.abs(share - 0.5) < 0.005, `00631L/00685L must be 50/50 after rebalance on ${date}: ${(share * 100).toFixed(2)}%`);
+  assert.ok(Math.abs(p.ratio - 100 / 3) < 1.5, `正二 ~33% on ${date}: ${p.ratio}`);
+}
+// 年中會漂移（兩檔漲跌不同），證明確實有在調
+const drift = Math.max(...halfRet.curve.filter((p) => p.date > halfRet.retiredAt).map((p) => Math.abs(p.l631 / (p.l631 + p.l685) - 0.5)));
+assert.ok(drift > 0.005, 'legs should drift between rebalances');
+console.log(`PASS 各半＋退休: ${rebalanceDates.length} 次再平衡都調回 50/50（年中最大漂移 ${(drift * 100).toFixed(2)} 個百分點），XIRR ${halfRet.annualized.toFixed(2)}%`);
+
 // 配置合計不是 100% 要報錯
 assert.throws(() => runAliang73Backtest(prices, { ...settings, retire: { ...retireOff, enabled: true, mix: { leveraged: 50, nasdaq: 30, cash: 30 } } }), /100%/);

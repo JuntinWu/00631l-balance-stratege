@@ -67,6 +67,9 @@ export type Aliang73Point = {
   /** 現金＋00865B */
   cash: number;
   nasdaq: number;
+  /** 正二部位中 00631L／00685L 各自市值 */
+  l631: number;
+  l685: number;
   /** 正二占總資產 % */
   ratio: number;
 };
@@ -207,8 +210,11 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
     const pay = Math.min(withdraw, v.total);
     const after = v.total - pay;
     const mix = retire.mix;
+    const lev = (after * mix.leveraged) / 100;
     const want = {
-      lev: (after * mix.leveraged) / 100,
+      // 各半模式：00631L、00685L 各自調回正二部位的一半
+      l631: half ? lev / 2 : lev,
+      l685: half ? lev / 2 : 0,
       nas: (after * mix.nasdaq) / 100,
       // 00865B 上市後現金部位放 00865B；之前以現金計息
       bond: pBond ? (after * mix.cash) / 100 : 0,
@@ -219,11 +225,13 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
       cash += net;
     };
     // 1) 賣超配
-    if (v.lev > want.lev) {
-      const k = want.lev / v.lev;
-      sell(v.lev - want.lev, SELL_COST_EQUITY);
-      s631 *= k;
-      s685 *= k;
+    if (s631 * p631 > want.l631) {
+      sell(s631 * p631 - want.l631, SELL_COST_EQUITY);
+      s631 = want.l631 / p631;
+    }
+    if (half && s685 * p685 > want.l685) {
+      sell(s685 * p685 - want.l685, SELL_COST_EQUITY);
+      s685 = want.l685 / p685;
     }
     if (v.nas > want.nas) {
       sell(v.nas - want.nas, SELL_COST_EQUITY);
@@ -238,27 +246,26 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
     cash -= paid;
     // 3) 買低配（現金不足時等比例縮小）
     const need = {
-      lev: Math.max(0, want.lev - s631 * p631 - s685 * p685),
+      l631: Math.max(0, want.l631 - s631 * p631),
+      l685: half ? Math.max(0, want.l685 - s685 * p685) : 0,
       nas: Math.max(0, want.nas - sNas * pNas),
       bond: pBond ? Math.max(0, want.bond - sBond * pBond) : 0,
     };
-    const needTotal = need.lev + need.nas + need.bond;
+    const needTotal = need.l631 + need.l685 + need.nas + need.bond;
     const cashTarget = pBond ? 0 : (after * mix.cash) / 100;
     const budget = Math.max(0, cash - cashTarget);
     const scale = needTotal > 0 ? Math.min(1, budget / (needTotal * (1 + BUY_FEE))) : 0;
-    if (need.lev > 0) buyLev(need.lev * scale * (1 + BUY_FEE), p631, p685);
-    if (need.nas > 0) {
-      const spend = need.nas * scale * (1 + BUY_FEE);
-      sNas += need.nas * scale / pNas;
-      costs += spend - need.nas * scale;
+    /** 買進 value 元的部位（另付手續費），回傳增加的股數 */
+    const buyValue = (value: number, price: number) => {
+      const spend = value * (1 + BUY_FEE);
+      costs += spend - value;
       cash -= spend;
-    }
-    if (pBond && need.bond > 0) {
-      const spend = need.bond * scale * (1 + BUY_FEE);
-      sBond += need.bond * scale / pBond;
-      costs += spend - need.bond * scale;
-      cash -= spend;
-    }
+      return value / price;
+    };
+    if (need.l631 > 0) s631 += buyValue(need.l631 * scale, p631);
+    if (need.l685 > 0) s685 += buyValue(need.l685 * scale, p685);
+    if (need.nas > 0) sNas += buyValue(need.nas * scale, pNas);
+    if (pBond && need.bond > 0) sBond += buyValue(need.bond * scale, pBond);
     return paid;
   };
 
@@ -365,6 +372,8 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
       asset: v.lev,
       cash: cash + v.bond,
       nasdaq: v.nas,
+      l631: s631 * row.close,
+      l685: s685 * (r685?.close ?? 0),
       ratio: v.total > 0 ? (v.lev / v.total) * 100 : 0,
     });
     benchmark.set(row.date, baseShares * baseRow.close);
