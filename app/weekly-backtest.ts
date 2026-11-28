@@ -31,13 +31,14 @@ const DIP_STEP_PCT = 10;
 const DIP_TRANCHES = 6;
 const ANNUAL_DAYS = 240;
 
-function weekOf(date: string) {
+export function weekOf(date: string) {
   const day = new Date(date);
   day.setUTCDate(day.getUTCDate() - (day.getUTCDay() + 6) % 7);
   return day.toISOString().slice(0, 10);
 }
 
-function weeklySignals(rows: OhlcRow[]) {
+/** 0050 週收盤 ≥ 最近 20 個已完成週均線 → true（key 為週一日期） */
+export function weeklySignals(rows: OhlcRow[]) {
   const closeByWeek = new Map<string, number>();
   for (const row of rows) closeByWeek.set(weekOf(row.date), row.close);
   const closes = [...closeByWeek.values()];

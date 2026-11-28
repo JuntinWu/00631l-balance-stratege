@@ -12,7 +12,7 @@ const prices = {
   bond: await readRows('00865B'),
 };
 const retireOff = { enabled: false, expenseWan: 100, multiple: 20, inflationPct: 2, withdraw: true, mix: { leveraged: 100 / 3, nasdaq: 100 / 3, cash: 100 / 3 } };
-const settings = { capitalWan: 1000, targetPct: 70, monthlyWan: 0, cashRatePct: 1.5, rungs: [20, 40, 60], startDate: '2014-01-01', endDate: '2099-12-31', legMode: 'single', retire: retireOff };
+const settings = { capitalWan: 1000, targetPct: 70, monthlyWan: 0, cashRatePct: 1.5, rungs: [20, 40, 60], startDate: '2014-01-01', endDate: '2099-12-31', legMode: 'single', accumMode: 'hold', retire: retireOff };
 
 // XIRR 自我檢查：投 100、一年後拿回 110 → 10%
 assert.ok(Math.abs(xirr([{ date: '2020-01-01', amount: -100 }, { date: '2020-12-31', amount: 110 }]) - 0.1) < 0.002, 'xirr sanity');
@@ -95,6 +95,34 @@ const uiRet = runAliang73Backtest(prices, { ...settings, rungs: [10, 20, 30, 40,
 assert.ok(ui.dipCount >= r.dipCount, 'shallower rungs trigger at least as often');
 assert.ok(ui.trades.filter((t) => t.label.startsWith('大跌加碼')).every((t) => /−(10|20|30|40|50)%/.test(t.label)));
 console.log(`PASS 預設階梯 10-50: 累積期年化 ${ui.annualized.toFixed(2)}%，加碼 ${ui.dipCount} 次；退休 333 ${uiRet.retiredAt}，XIRR ${uiRet.annualized.toFixed(2)}%`);
+
+// ── 累積期跌破 20 週均線出一半 ──
+const wk = runAliang73Backtest(prices, { ...settings, accumMode: 'weekly20' });
+const exits = wk.trades.filter((t) => t.label.includes('跌破 20 週均線'));
+const backs = wk.trades.filter((t) => t.label.includes('站回 20 週均線'));
+assert.ok(exits.length >= 5, `expect several weekly exits, got ${exits.length}`);
+assert.equal(wk.exitCount, exits.length);
+const halfStart = wk.trades[0].label.startsWith('起始低於 20 週均線');
+const opens = exits.length + (halfStart ? 1 : 0);
+assert.ok(backs.length === opens || backs.length === opens - 1, 'every exit is followed by one re-entry (except a final open one)');
+if (halfStart) assert.ok(Math.abs(wk.trades[0].ratio - 35) < 0.3, `half-position start ~35%: ${wk.trades[0].ratio}`);
+assert.ok(!wk.trades.some((t) => t.date === wk.trades[0].date && t.kind === 'sell'), 'never buy-then-sell on day one');
+assert.ok(exits.every((t) => t.kind === 'sell' && t.amount < 0), 'exits are sells');
+const exitDates = [...(halfStart ? [wk.trades[0].date] : []), ...exits.map((t) => t.date)];
+for (let i = 0; i < backs.length; i += 1) assert.ok(backs[i].date > exitDates[i] && (i + 1 >= exitDates.length || backs[i].date < exitDates[i + 1]), 'exit/re-entry alternate');
+// 出一半：成交後正二占比約為成交前的一半（相對總資產）
+for (const t of exits) {
+  const before = wk.curve[wk.curve.findIndex((p) => p.date === t.date) - 1];
+  assert.ok(t.ratio < before.ratio * 0.72, `正二 should roughly halve on ${t.date}: ${before.ratio.toFixed(1)}% → ${t.ratio.toFixed(1)}%`);
+}
+assert.ok(wk.curve.every((p) => p.cash >= -0.01 && p.asset >= 0));
+// 出場資金不拿來加碼：hold 版的加碼金額序列不會因此變大
+assert.ok(wk.trades.filter((t) => t.label.startsWith('大跌加碼')).every((t) => t.amount <= 3_100_000));
+// 退休後不再出場
+const wkRet = runAliang73Backtest(prices, { ...settings, accumMode: 'weekly20', retire: { ...retireOff, enabled: true } });
+assert.ok(wkRet.retiredAt);
+assert.ok(wkRet.trades.filter((t) => t.label.includes('20 週均線')).every((t) => t.date <= wkRet.retiredAt), 'no weekly trades after retiring');
+console.log(`PASS 20 週線出一半: ${halfStart ? '起始半部位、' : ''}出場 ${exits.length} 次／買回 ${backs.length} 次，累積期年化 ${wk.annualized.toFixed(2)}%（不再平衡 ${r.annualized.toFixed(2)}%），MDD 見 UI；退休 ${wkRet.retiredAt}，XIRR ${wkRet.annualized.toFixed(2)}%`);
 
 // 配置合計不是 100% 要報錯
 assert.throws(() => runAliang73Backtest(prices, { ...settings, retire: { ...retireOff, enabled: true, mix: { leveraged: 50, nasdaq: 30, cash: 30 } } }), /100%/);

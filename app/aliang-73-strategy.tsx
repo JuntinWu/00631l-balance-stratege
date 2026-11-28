@@ -25,6 +25,7 @@ type Draft = {
   startDate: string;
   endDate: string;
   legMode: 'single' | 'half';
+  accumMode: 'hold' | 'weekly20';
   retireEnabled: boolean;
   expenseWan: number;
   multiple: number;
@@ -45,6 +46,7 @@ const defaults: Draft = {
   startDate: '',
   endDate: '',
   legMode: 'single',
+  accumMode: 'hold',
   retireEnabled: true,
   expenseWan: 100,
   multiple: 20,
@@ -72,6 +74,7 @@ function toSettings(d: Draft, earliest: string, latest: string): Aliang73Setting
     startDate: d.startDate || earliest,
     endDate: d.endDate || latest,
     legMode: d.legMode,
+    accumMode: d.accumMode,
     retire: { enabled: d.retireEnabled, expenseWan: d.expenseWan, multiple: d.multiple, inflationPct: d.inflationPct, withdraw: d.withdraw, mix },
   };
 }
@@ -152,11 +155,15 @@ export default function Aliang73Strategy({ baseRows, leveragedRows }: {
               <option value="single">00631L 單檔（2014/10 起）</option>
               <option value="half">00631L／00685L 各半（2017/3 起）</option>
             </select></div></label>
+            <label className="field"><span>累積期操作</span><div className="input-shell"><select value={draft.accumMode} onChange={(event) => set('accumMode', event.target.value as Draft['accumMode'])}>
+              <option value="hold">不再平衡（節目原版）</option>
+              <option value="weekly20">跌破 20 週均線出一半</option>
+            </select></div></label>
             <label className="field"><span>每月新資金</span><div className="input-shell"><input type="number" min={0} step={0.5} value={draft.monthlyWan} onChange={num('monthlyWan')} /><b>萬元</b></div></label>
             <label className="field"><span>現金年利率</span><div className="input-shell"><input type="number" min={0} max={20} step={0.1} value={draft.cashRatePct} onChange={num('cashRatePct')} /><b>%</b></div></label>
             <label className="field"><span>大跌加碼階梯（距前高）</span><div className="input-shell"><input type="text" inputMode="decimal" value={draft.rungsText} onChange={(event) => set('rungsText', event.target.value)} /><b>%</b></div></label>
           </div>
-          <p className="setting-help">新資金一樣七三配：每月第一個交易日開盤，七成買正二、三成進現金。00631L 從收盤前高回落到每個階梯時，投入「當下現金 ÷ 剩餘階數」；收盤創新高後階梯重置。選各半時，每筆買進都平分給兩檔，起始日自動移到 00685L 上市日。</p>
+          <p className="setting-help">新資金一樣七三配：每月第一個交易日開盤，七成買正二、三成進現金。00631L 從收盤前高回落到每個階梯時，投入「當下現金 ÷ 剩餘階數」；收盤創新高後階梯重置。選各半時，每筆買進都平分給兩檔，起始日自動移到 00685L 上市日。選「跌破 20 週均線出一半」時：0050 週收盤跌破 20 週均線，下一週首個交易日開盤賣出一半正二；這筆錢另外保留、不拿來大跌加碼，0050 週收盤站回均線後，下一週開盤全數買回正二。</p>
         </div>
 
         <div className="setting-block">
@@ -195,7 +202,7 @@ export default function Aliang73Strategy({ baseRows, leveragedRows }: {
     {result && <section className="results" id="aliang-results" ref={resultRef}>
       <div className="results-head">
         <div><h2>回測結果</h2></div>
-        <div className="strategy-chip">七三配 {legName}<b>{applied.retireEnabled ? `${applied.multiple} 倍轉 ${appliedMix}${applied.withdraw ? '' : '・不提領'}` : '只看累積期'}</b></div>
+        <div className="strategy-chip">七三配 {legName}<b>{applied.accumMode === 'weekly20' ? '20 週線出一半・' : ''}{applied.retireEnabled ? `${applied.multiple} 倍轉 ${appliedMix}${applied.withdraw ? '' : '・不提領'}` : '只看累積期'}</b></div>
       </div>
       {applied.retireEnabled && <p className="setting-help">
         {result.retiredAt
@@ -209,9 +216,9 @@ export default function Aliang73Strategy({ baseRows, leveragedRows }: {
         <article className="metric"><span>總報酬率</span><strong className={result.totalReturn >= 0 ? 'positive' : 'negative'}>{percent(result.totalReturn)}</strong><p>（期末＋已提領）÷ 投入本金</p></article>
         <article className="metric"><span>{result.simple ? '複合年化報酬率' : '年化報酬（XIRR）'}</span><strong className={result.annualized >= 0 ? 'positive' : 'negative'}>{percent(result.annualized)}</strong><p>0050 同現金流 {percent(result.benchAnnualized)}</p></article>
         <DrawdownMetric points={drawdownPoints} />
-        <article className="metric"><span>大跌加碼</span><strong>{result.dipCount}<small>次</small></strong><p>期末正二占比 {result.endingRatio.toFixed(1)}%</p></article>
+        <article className="metric"><span>大跌加碼</span><strong>{result.dipCount}<small>次</small></strong><p>{applied.accumMode === 'weekly20' ? `20 週線出一半 ${result.exitCount} 次・` : ''}期末正二占比 {result.endingRatio.toFixed(1)}%</p></article>
       </div>
-      {!applied.retireEnabled && applied.monthlyWan === 0 && result.endingRatio > 95 && <p className="setting-help">沒有新資金時，三成現金在前幾次大跌就會用完，之後正二占比會漂到接近 100%。這符合「累積期不做再平衡」；要維持三成現金，需要持續的新資金，或開啟退休期改成 333／433 並每年再平衡。</p>}
+      {!applied.retireEnabled && applied.accumMode === 'hold' && applied.monthlyWan === 0 && result.endingRatio > 95 && <p className="setting-help">沒有新資金時，三成現金在前幾次大跌就會用完，之後正二占比會漂到接近 100%。這符合「累積期不做再平衡」；要維持三成現金，需要持續的新資金，或開啟退休期改成 333／433 並每年再平衡。</p>}
       <article className="panel chart-panel"><div className="panel-title"><h3>資產權益曲線</h3><span>總資產含 00662；0050 以相同現金流（投入買進、提領賣出）計算，採含息還原價</span></div><LineChart points={result.curve} benchmark={result.benchmark} labels={{ asset: '正二部位', cash: '現金＋00865B' }} /></article>
       <article className="panel drawdown-panel"><div className="panel-title"><h3>資產最大回撤</h3>{!result.simple && <span>含投入與提領，回撤金額會受現金流影響</span>}</div><DrawdownChart points={drawdownPoints} label="七三配策略資產回撤" /></article>
       <details className="panel trade-panel" open>
@@ -220,9 +227,9 @@ export default function Aliang73Strategy({ baseRows, leveragedRows }: {
           <thead><tr><th>日期</th><th>動作</th><th>00631L 價格</th><th>金額</th><th>成交後正二占比</th></tr></thead>
           <tbody>{result.trades.map((trade, index) => <tr key={index}>
             <td>{trade.date.replaceAll('-', '/')}</td>
-            <td className={trade.amount < 0 ? 'sell' : 'buy'}>{trade.label}</td>
+            <td className={trade.kind === 'buy' ? 'buy' : trade.kind === 'rebalance' ? '' : 'sell'}>{trade.label}</td>
             <td>{trade.price.toFixed(2)}</td>
-            <td>{trade.amount === 0 ? '—' : `${trade.amount < 0 ? '提領 ' : '買進 '}${money.format(Math.abs(trade.amount))} 元`}</td>
+            <td>{trade.amount === 0 ? '—' : `${trade.kind === 'sell' ? '賣出 ' : trade.kind === 'withdraw' ? '提領 ' : '買進 '}${money.format(Math.abs(trade.amount))} 元`}</td>
             <td>{trade.ratio.toFixed(1)}%</td>
           </tr>)}</tbody>
         </table></div>
@@ -234,6 +241,7 @@ export default function Aliang73Strategy({ baseRows, leveragedRows }: {
       <ol>
         <li><b>累積期：一次七三配到位</b><p>起始日開盤，起始資金的 70% 買正二、30% 留現金（緊急預備金兼加碼金）。節目建議不要等時機，盡快配置完成。正二可選 00631L 單檔，或節目建議的 00631L／00685L 各半。</p></li>
         <li><b>累積期不再平衡</b><p>正二漲上去就讓它漲，不賣出；現金只依年利率計息（日複利）。每月新資金一樣七三配。</p></li>
+        <li><b>（選項）跌破 20 週均線出一半</b><p>節目原版累積期不賣出。開啟後改用第 04 分頁的訊號：0050 以最近 20 個已完成週收盤計算均線，週收盤跌破均線，下一週首個交易日開盤賣出一半正二（各半模式兩檔各賣一半，計入手續費與 0.1% 證交稅）。賣得的錢另外保留並計息、不拿來大跌加碼；0050 週收盤站回均線，下一週開盤全數買回正二。進入退休期後不再使用這個規則。</p></li>
         <li><b>大跌才動用現金</b><p>節目只說大跌 10%～20% 時加碼。本回測預設：00631L 距收盤前高 −10%／−20%／−30%／−40%／−50%（約等於大盤 −5%～−25%）各投入一份現金（當下現金 ÷ 剩餘階數），階梯可自行調整。盤中觸價以門檻價成交，開盤跳空以開盤價成交；收盤創新高後重置。</p></li>
         <li><b>退休門檻：20 倍年開銷</b><p>金融資產（現金＋股票）達當年年開銷的 20 倍就退休。節目提到信貸要另外算（借來的本金先扣掉），本回測不含借貸，所以直接用總資產判斷。</p></li>
         <li><b>退休期：降到 beta ≤ 100% 並每年再平衡</b><p>預設三刀流 333：正二、00662、現金各 1/3（beta = 2/3 + 1/3 = 100%）。也可選 433、過渡用的 253、163 或自訂。每年最後一個交易日收盤先提領下一年生活費（依通膨成長；可關閉提領），再賣超配、買低配，調回目標比例；選各半時，00631L 與 00685L 也各自調回正二部位的一半。現金部位在 00865B 上市前以現金計息，上市後放 00865B。</p></li>

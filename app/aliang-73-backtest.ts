@@ -1,4 +1,5 @@
 import type { OhlcRow } from './price-adjustments';
+import { weekOf, weeklySignals } from './weekly-backtest.ts';
 
 /**
  * 阿良「七三配 → 三刀流」策略（EP144《阿良濃縮再提煉的簡單正二投資法》）
@@ -11,6 +12,9 @@ import type { OhlcRow } from './price-adjustments';
  * 4. 大跌才動用現金：00631L 從收盤前高回落到各階梯（UI 預設 −10／−20／−30／−40／−50%）時，
  *    每階投入「當下現金 ÷ 剩餘階數」；收盤創新高後重置。（節目只說「大跌 10%、20% 加碼」，
  *    階梯數字是本回測的量化假設。）
+ *
+ * 4b.（選項）跌破 20 週均線出一半：0050 週收盤跌破 20 週均線，下一週首個交易日開盤賣出一半正二；
+ *    賣出的錢另外記帳（不算進三成預備金），0050 週收盤站回均線後，下一週開盤全數買回正二。
  *
  * 退休期（金融資產達年開銷 N 倍，預設 20 倍）
  * 5. 觸發當天收盤：先提領一年生活費，再把剩下資產調成退休配置
@@ -30,6 +34,8 @@ export type Aliang73Settings = {
   endDate: string;
   /** single＝只用 00631L；half＝00631L、00685L 各半 */
   legMode: 'single' | 'half';
+  /** 累積期：hold＝不再平衡（節目原版）；weekly20＝0050 跌破 20 週均線時正二出一半 */
+  accumMode: 'hold' | 'weekly20';
   retire: {
     enabled: boolean;
     /** 起始年度的年生活開銷（萬元），之後依通膨成長 */
@@ -56,8 +62,9 @@ export type Aliang73Trade = {
   label: string;
   /** 00631L 當時價格（參考） */
   price: number;
-  /** 正值＝買進／投入；負值＝提領 */
+  /** 正值＝買進／投入；負值＝賣出或提領 */
   amount: number;
+  kind: 'buy' | 'sell' | 'withdraw' | 'rebalance';
   ratio: number;
 };
 
@@ -161,6 +168,12 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
   let retiredAt: string | null = null;
   let retiredTotal = 0;
   let waitingForNasdaq = false;
+  // 20 週均線模式：賣出一半正二得到的錢（另外記帳，站回後買回）
+  const weekly20 = settings.accumMode === 'weekly20';
+  const signals = weekly20 ? weeklySignals(prices.base) : new Map<string, boolean>();
+  let parked = 0;
+  let defending = false;
+  let exitCount = 0;
 
   const flows: Array<{ date: string; amount: number }> = [];
   const trades: Aliang73Trade[] = [];
@@ -191,9 +204,13 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
     cash -= spend;
   };
 
-  const record = (date: string, label: string, p631: number, p685: number, amount: number, pNas?: number, pBond?: number) => {
+  const record = (date: string, label: string, p631: number, p685: number, amount: number, pNas?: number, pBond?: number, kind?: Aliang73Trade['kind']) => {
     const v = values(p631, p685, pNas, pBond);
-    trades.push({ date, label, price: p631, amount, ratio: v.total > 0 ? (v.lev / v.total) * 100 : 0 });
+    trades.push({
+      date, label, price: p631, amount,
+      kind: kind ?? (amount > 0 ? 'buy' : amount < 0 ? 'withdraw' : 'rebalance'),
+      ratio: v.total > 0 ? (v.lev / v.total) * 100 : 0,
+    });
   };
 
   const baseFlow = (date: string, amount: number, price: number) => {
@@ -276,8 +293,18 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
   invested += initial;
   flows.push({ date: first.date, amount: -initial });
   baseFlow(first.date, initial, base.get(first.date)!.open);
-  buyLev(initial * target, first.open, p685Open(first.date));
-  record(first.date, `初始七三配（正二 ${targetPct}%${half ? '，00631L／00685L 各半' : ''}）`, first.open, p685Open(first.date), initial * target);
+  const legLabel = half ? '，00631L／00685L 各半' : '';
+  if (weekly20 && signals.get(weekOf(first.date)) === false) {
+    // 起始就在 20 週線下：正二先買一半，另一半當出場資金保留，站回後買回
+    const lev = initial * target;
+    buyLev(lev / 2, first.open, p685Open(first.date));
+    parked = lev / 2;
+    defending = true;
+    record(first.date, `起始低於 20 週均線，正二半部位建倉（目標 ${targetPct}%${legLabel}）`, first.open, p685Open(first.date), lev / 2);
+  } else {
+    buyLev(initial * target, first.open, p685Open(first.date));
+    record(first.date, `初始七三配（正二 ${targetPct}%${legLabel}）`, first.open, p685Open(first.date), initial * target);
+  }
 
   let peak = first.open;
   let rungIndex = 0;
@@ -294,8 +321,10 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
     // 現金利息（日複利，依日曆天數）
     const days = (Date.parse(row.date) - Date.parse(prevDate)) / DAY_MS;
     if (days > 0 && cash > 0 && rate > 0) {
-      const gain = cash * ((1 + rate) ** (days / 365) - 1);
+      const growth = (1 + rate) ** (days / 365) - 1;
+      const gain = cash * growth;
       cash += gain;
+      parked += parked * growth;
       interest += gain;
     }
     prevDate = row.date;
@@ -315,15 +344,40 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
         }
       }
 
-      // 大跌加碼階梯：以 00631L 距收盤前高的回落幅度觸發
-      while (rungIndex < rungs.length && cash >= 1000) {
+      // （選項）20 週均線：跌破出一半、站回買回，都在該週首個交易日開盤執行
+      if (weekly20) {
+        const above = signals.get(weekOf(row.date)) ?? true; // 前 20 週還沒有均線，視為線上
+        if (!defending && !above) {
+          const p685 = r685?.open ?? 0;
+          const gross = (s631 * row.open + s685 * p685) / 2;
+          const net = gross * (1 - SELL_COST_EQUITY);
+          costs += gross - net;
+          s631 /= 2;
+          s685 /= 2;
+          cash += net;
+          parked += net;
+          defending = true;
+          exitCount += 1;
+          record(row.date, '0050 跌破 20 週均線，正二出一半', row.open, p685, -net, undefined, undefined, 'sell');
+        } else if (defending && above) {
+          const p685 = r685?.open ?? 0;
+          const spend = Math.min(parked, cash);
+          if (spend > 0) buyLev(spend, row.open, p685);
+          parked = 0;
+          defending = false;
+          record(row.date, '0050 站回 20 週均線，買回正二', row.open, p685, spend);
+        }
+      }
+
+      // 大跌加碼階梯：以 00631L 距收盤前高的回落幅度觸發（只動用三成預備金，不含出場資金）
+      while (rungIndex < rungs.length && cash - parked >= 1000) {
         const decline = rungs[rungIndex];
         const trigger = peak * (1 - decline / 100);
         if (row.low > trigger) break;
         const fill = Math.min(row.open, trigger);
         // 00685L 以同一時點的相對漲跌估算成交價，並限制在當日高低之間
         const fill685 = r685 ? Math.min(r685.high, Math.max(r685.low, r685.open * (fill / row.open))) : 0;
-        const spend = cash / (rungs.length - rungIndex);
+        const spend = (cash - parked) / (rungs.length - rungIndex);
         buyLev(spend, fill, fill685);
         record(row.date, `大跌加碼：00631L 距前高 −${decline}%`, fill, fill685, spend);
         rungIndex += 1;
@@ -346,6 +400,8 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
             flows.push({ date: row.date, amount: paid });
             baseFlow(row.date, -paid, baseRow.close);
             phase = 'retired';
+            parked = 0;
+            defending = false;
             retiredAt = row.date;
             retiredTotal = v.total;
             record(row.date, `達 ${retire.multiple} 倍年開銷，轉退休配置${retire.withdraw ? '並提領第一年生活費' : '（不提領）'}`, row.close, r685?.close ?? 0, -paid, nasRow?.close, bondRow?.close);
@@ -412,6 +468,9 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
     benchAnnualized,
     simple,
     dipCount: trades.filter((t) => t.label.startsWith('大跌加碼')).length,
+    exitCount,
+    /** 期末是否仍在 20 週線下的防守狀態 */
+    defending,
     retiredAt,
     retiredTotal,
     depleted: phase === 'depleted',
