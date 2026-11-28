@@ -151,6 +151,7 @@ export function runWeeklyBacktest(base: OhlcRow[], leveraged: OhlcRow[], setting
     curve,
     trades,
     initial,
+    buyFee: BUY_FEE,
     ending: last.total,
     totalReturn: (last.total / initial - 1) * 100,
     cagr: ((last.total / initial) ** (1 / years) - 1) * 100,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
+import { build0050Benchmark } from './0050-benchmark';
 import LineChart from './asset-chart';
 import DrawdownChart, { DrawdownMetric } from './drawdown-chart';
 import type { OhlcRow } from './price-adjustments';
@@ -45,6 +46,9 @@ export default function WeeklyStrategy({ baseRows, leveragedRows }: {
   const drawdownPoints = useMemo(() =>
     result?.curve.map(({ date, total }) => ({ date, value: total })) ?? [],
   [result]);
+  const benchmark = useMemo(() => result
+    ? build0050Benchmark(result.curve, baseRows, result.initial, result.buyFee, 'open')
+    : undefined, [result, baseRows]);
 
   return <div className="strategy-pane">
     <section className="workspace" id="weekly-settings">
@@ -93,7 +97,7 @@ export default function WeeklyStrategy({ baseRows, leveragedRows }: {
         <DrawdownMetric points={drawdownPoints} />
         <article className="metric"><span>階梯加碼</span><strong>{result.dipCount}<small>次</small></strong></article>
       </div>
-      <article className="panel chart-panel"><div className="panel-title"><h3>資產權益曲線</h3></div><LineChart points={result.curve} /></article>
+      <article className="panel chart-panel"><div className="panel-title"><h3>資產權益曲線</h3><span>0050 以相同本金在首日開盤買進，採含息還原價並計入買進手續費</span></div><LineChart points={result.curve} benchmark={benchmark} /></article>
       <article className="panel drawdown-panel"><div className="panel-title"><h3>資產最大回撤</h3></div><DrawdownChart points={drawdownPoints} label="20 週均線策略資產回撤" /></article>
       <details className="panel trade-panel" open>
         <summary><span>交易明細</span><b>{result.trades.length} 筆</b></summary>

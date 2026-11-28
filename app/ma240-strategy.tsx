@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { BASE_BENCHMARK_COLOR, BASE_BENCHMARK_LABEL } from './asset-chart';
 import DrawdownChart, { DrawdownMetric } from './drawdown-chart';
 import { runMa240Backtest, type Ma240CurvePoint, type Ma240Result, type Ma240Settings } from './ma240-backtest';
 import type { OhlcRow } from './price-adjustments';
@@ -38,20 +39,21 @@ function PortfolioChart({ points }: { points: Ma240CurvePoint[] }) {
     const step = Math.max(1, Math.ceil(points.length / 720));
     return points.filter((_, index) => index % step === 0 || index === points.length - 1);
   }, [points]);
-  const max = Math.max(...points.flatMap((point) => [point.total, point.base, point.leveraged, point.invested]), 1);
+  const max = Math.max(...points.flatMap((point) => [point.total, point.base, point.leveraged, point.invested, point.baseBenchmark]), 1);
   const x = (index: number) => pad.left + index / Math.max(1, sampled.length - 1) * (width - pad.left - pad.right);
   const y = (value: number) => pad.top + (1 - value / max) * (height - pad.top - pad.bottom);
-  const path = (key: 'total' | 'base' | 'leveraged' | 'invested') => sampled
+  const path = (key: 'total' | 'base' | 'leveraged' | 'invested' | 'baseBenchmark') => sampled
     .map((point, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${y(point[key]).toFixed(1)}`).join(' ');
   const ticks = [0, .25, .5, .75, 1];
   const series = [
     { key: 'total' as const, name: '總資產', color: '#d0e73e' },
-    { key: 'base' as const, name: '0050 部位', color: '#145f48' },
+    { key: 'base' as const, name: '策略內的 0050 部位', color: '#7b5d94' },
     { key: 'leveraged' as const, name: '00631L 部位', color: '#4786aa' },
     { key: 'invested' as const, name: '累計投入', color: '#9eaaa3' },
+    { key: 'baseBenchmark' as const, name: BASE_BENCHMARK_LABEL, color: BASE_BENCHMARK_COLOR },
   ];
   return <div className="chart-wrap">
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="240年線加碼策略資產曲線">
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="240 年線策略與 100% 持有 0050 的資產曲線">
       {ticks.map((tick) => <g key={tick}>
         <line x1={pad.left} x2={width - pad.right} y1={y(max * tick)} y2={y(max * tick)} className="grid-line" />
         <text x={pad.left - 12} y={y(max * tick) + 4} textAnchor="end" className="axis-label">{compactMoney(max * tick)}</text>
@@ -60,9 +62,12 @@ function PortfolioChart({ points }: { points: Ma240CurvePoint[] }) {
         const index = Math.round(tick * (sampled.length - 1));
         return <text key={`date-${tick}`} x={x(index)} y={height - 14} textAnchor="middle" className="axis-label">{sampled[index]?.date.slice(0, 7).replace('-', '/')}</text>;
       })}
-      {series.map((item) => <path key={item.key} d={path(item.key)} fill="none" stroke={item.color} strokeWidth={item.key === 'total' ? 2.8 : 2} strokeDasharray={item.key === 'invested' ? '6 5' : undefined} />)}
+      {series.map((item) => <path key={item.key} d={path(item.key)} fill="none" stroke={item.color} strokeWidth={item.key === 'total' ? 2.8 : 2} strokeDasharray={item.key === 'baseBenchmark' ? '7 4' : item.key === 'invested' ? '6 5' : undefined} />)}
     </svg>
-    <div className="legend">{series.map((item) => <span key={item.key}><i style={{ background: item.color }} />{item.name}</span>)}</div>
+    <div className="legend">{series.map((item) => <span key={item.key}>
+      {item.key === 'baseBenchmark' ? <i className="benchmark-swatch" style={{ color: item.color }} /> : <i style={{ background: item.color }} />}
+      {item.name}
+    </span>)}</div>
   </div>;
 }
 
@@ -184,7 +189,7 @@ export default function Ma240Strategy({ baseRows, leveragedRows }: { baseRows: O
         <article className="metric"><span>時間加權年化</span><strong className={result.cagr >= 0 ? 'positive' : 'negative'}>{signedPct(result.cagr)}</strong></article>
         <DrawdownMetric points={result.curve.map((point) => ({ date: point.date, value: point.total }))} />
       </div>
-      <article className="panel chart-panel"><div className="panel-title"><h3>資產成長曲線</h3><span>含每月投入；灰色虛線為累計本金</span></div><PortfolioChart points={result.curve} /></article>
+      <article className="panel chart-panel"><div className="panel-title"><h3>資產成長曲線</h3><span>0050 基準在相同日期投入同樣的起始本金與每月加碼，採含息還原價及相同買進手續費</span></div><PortfolioChart points={result.curve} /></article>
       <article className="panel drawdown-panel"><div className="panel-title"><h3>資產最大回撤</h3><span>每日實際資產相對歷史前高的金額差，包含每月投入</span></div><DrawdownChart points={result.curve.map((point) => ({ date: point.date, value: point.total }))} label="240 年線分批轉正二資產回撤" /></article>
       <div className="two-column ma-columns">
         <article className="panel"><div className="panel-title"><h3>0050 與 240MA</h3><span>年線下的月份改買 00631L</span></div><SignalChart points={result.curve} /></article>

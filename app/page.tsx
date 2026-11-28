@@ -1,6 +1,7 @@
 'use client';
 
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { build0050Benchmark } from './0050-benchmark';
 import LineChart, { compactMoney, type AssetCurvePoint } from './asset-chart';
 import DrawdownChart, { DrawdownMetric } from './drawdown-chart';
 import Ma240Strategy from './ma240-strategy';
@@ -35,6 +36,7 @@ type Result = {
   totalReturn: number;
   cagr: number;
   mdd: number;
+  initial: number;
   ending: number;
   buyFee: number;
   sellFee: number;
@@ -173,6 +175,7 @@ function runBacktest(rows: PriceRow[], settings: Settings): Result {
     totalReturn: (ending / initial - 1) * 100,
     cagr: (Math.pow(ending / initial, 1 / yearsElapsed) - 1) * 100,
     mdd: mdd * 100,
+    initial,
     ending,
     buyFee,
     sellFee,
@@ -305,6 +308,11 @@ export default function Home() {
     setSettings((value) => ({ ...value, [key]: Number(event.target.value) }));
   };
   const filteredCount = data.filter((row) => row.date >= startDate && row.date <= endDate).length;
+  const benchmark = useMemo(() => result
+    ? build0050Benchmark(result.curve, baseData, result.initial, result.buyFee, 'close')
+    : undefined, [result, baseData]);
+  const benchmarkPartial = result && benchmark?.size
+    && (!benchmark.has(result.curve[0].date) || !benchmark.has(result.curve.at(-1)!.date));
   const navTargets = {
     threshold: ['#settings', '#results', '#method'],
     ma240: ['#ma-settings', '#ma-results', '#ma-method'],
@@ -416,14 +424,19 @@ export default function Home() {
         {result && <section className="results" id="results" ref={resultRef}>
           <div className="results-head"><div><p className="eyebrow">BACKTEST COMPLETE</p><h2>回測結果</h2></div><div className="strategy-chip">00631L {settings.targetPct}% / 現金 {100 - settings.targetPct}%<b>＋{settings.upPct}% / −{settings.downPct}%</b></div></div>
           <div className="metrics">
-            <article className="metric primary"><span>期末資產</span><strong>{money.format(result.ending)}<small>元</small></strong><p>起始 {money.format(settings.capitalWan * 10000)} 元</p></article>
+            <article className="metric primary"><span>期末資產</span><strong>{money.format(result.ending)}<small>元</small></strong><p>起始 {money.format(result.initial)} 元</p></article>
             <article className="metric"><span>總報酬率</span><strong className={result.totalReturn >= 0 ? 'positive' : 'negative'}>{pct(result.totalReturn)}</strong></article>
             <article className="metric"><span>CAGR 年化</span><strong className={result.cagr >= 0 ? 'positive' : 'negative'}>{pct(result.cagr)}</strong></article>
             <DrawdownMetric points={result.curve.map((point) => ({ date: point.date, value: point.total }))} />
             <article className="metric"><span>再平衡次數</span><strong>{Math.max(0, result.trades.length - 1)}<small>次</small></strong></article>
           </div>
 
-          <article className="panel chart-panel"><div className="panel-title"><h3>資產權益曲線</h3><span>總資產 / 00631L 部位 / 現金</span></div><LineChart points={result.curve} /></article>
+          <article className="panel chart-panel">
+            <div className="panel-title"><h3>資產權益曲線</h3><span>0050 以相同本金一次買進，採含息還原價並計入買進手續費</span></div>
+            <LineChart points={result.curve} benchmark={benchmark} />
+            {benchmarkPartial ? <p className="backtest-note">0050 行情未涵蓋完整回測期間，基準僅顯示有資料的區間。</p> : null}
+            {!benchmark?.size && <p className="backtest-note">所選期間沒有可對照的 0050 行情。</p>}
+          </article>
           <article className="panel drawdown-panel"><div className="panel-title"><h3>資產最大回撤</h3><span>每日總資產相對歷史前高的金額差</span></div><DrawdownChart points={result.curve.map((point) => ({ date: point.date, value: point.total }))} label="門檻式再平衡資產回撤" /></article>
           <div className="two-column">
             <article className="panel"><div className="panel-title"><h3>00631L 占比走勢</h3><span>觸發後回到 {settings.targetPct}%</span></div><LineChart points={result.curve} ratio /></article>

@@ -14,6 +14,7 @@ export type Ma240CurvePoint = {
   base: number;
   leveraged: number;
   invested: number;
+  baseBenchmark: number;
   twr: number;
   basePrice: number;
   movingAverage: number;
@@ -106,6 +107,7 @@ export function runMa240Backtest(
   const initial = Math.max(0, settings.initialWan) * 10_000;
   const monthly = Math.max(0, settings.monthlyWan) * 10_000;
   let baseShares = 0;
+  let benchmarkShares = 0;
   let leveragedShares = 0;
   let highWater = 0;
   let cycleBaseShares = 0;
@@ -131,6 +133,7 @@ export function runMa240Backtest(
     const isAbove = row.close >= row.movingAverage;
     if (contribution > 0) {
       const investable = contribution / (1 + buyFee);
+      benchmarkShares += investable / row.close;
       if (isAbove) baseShares += investable / row.close;
       else leveragedShares += investable / row.leveragedClose;
       totalInvested += contribution;
@@ -186,6 +189,7 @@ export function runMa240Backtest(
       base,
       leveraged,
       invested: totalInvested,
+      baseBenchmark: benchmarkShares * row.close,
       twr: timeWeightedIndex,
       basePrice: row.close,
       movingAverage: row.movingAverage,

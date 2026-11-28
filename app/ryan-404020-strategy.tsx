@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { BASE_BENCHMARK_COLOR, BASE_BENCHMARK_LABEL } from './asset-chart';
 import DrawdownChart, { DrawdownMetric } from './drawdown-chart';
 import {
   runRyan404020Backtest,
@@ -52,7 +53,7 @@ function ComparisonChart({ points }: { points: RyanCurvePoint[] }) {
   const ticks = [0, .25, .5, .75, 1];
   const series = [
     { key: 'total' as const, name: '40/40/20 均線策略', color: '#d0e73e', width: 3 },
-    { key: 'baseBenchmark' as const, name: '100% 0050', color: '#145f48', width: 2 },
+    { key: 'baseBenchmark' as const, name: BASE_BENCHMARK_LABEL, color: BASE_BENCHMARK_COLOR, width: 2.5 },
     { key: 'leveragedBenchmark' as const, name: '100% 00631L', color: '#d06b45', width: 2 },
     { key: 'halfBenchmark' as const, name: '正二/現金 50/50', color: '#4786aa', width: 2 },
   ];
@@ -66,9 +67,12 @@ function ComparisonChart({ points }: { points: RyanCurvePoint[] }) {
         const index = Math.round(tick * (sampled.length - 1));
         return <text key={`date-${tick}`} x={x(index)} y={height - 14} textAnchor="middle" className="axis-label">{sampled[index]?.date.slice(0, 7).replace('-', '/')}</text>;
       })}
-      {series.map((item) => <path key={item.key} d={path(item.key)} fill="none" stroke={item.color} strokeWidth={item.width} strokeLinejoin="round" />)}
+      {series.map((item) => <path key={item.key} d={path(item.key)} fill="none" stroke={item.color} strokeWidth={item.width} strokeDasharray={item.key === 'baseBenchmark' ? '7 4' : undefined} strokeLinejoin="round" />)}
     </svg>
-    <div className="legend">{series.map((item) => <span key={item.key}><i style={{ background: item.color }} />{item.name}</span>)}</div>
+    <div className="legend">{series.map((item) => <span key={item.key}>
+      {item.key === 'baseBenchmark' ? <i className="benchmark-swatch" style={{ color: item.color }} /> : <i style={{ background: item.color }} />}
+      {item.name}
+    </span>)}</div>
   </div>;
 }
 
@@ -209,7 +213,7 @@ export default function Ryan404020Strategy({ baseRows, leveragedRows, qqqRows }:
         <article className="metric"><span>上漲年度</span><strong>{result.positiveYears}<small> / {result.annual.length}</small></strong></article>
       </div>
 
-      <article className="panel chart-panel"><div className="panel-title"><h3>策略與基準資產曲線</h3><span>相同起始資金；50/50 基準每年首個交易日再平衡</span></div><ComparisonChart points={result.curve} /></article>
+      <article className="panel chart-panel"><div className="panel-title"><h3>策略與基準資產曲線</h3><span>各基準使用相同起始資金。0050 採含息還原價，50/50 基準每年首個交易日再平衡。</span></div><ComparisonChart points={result.curve} /></article>
       <article className="panel drawdown-panel"><div className="panel-title"><h3>資產最大回撤</h3><span>40 / 40 / 20 組合每日距離歷史前高的金額差</span></div><DrawdownChart points={result.curve.map((point) => ({ date: point.date, value: point.total }))} label="40 / 40 / 20 均線策略資產回撤" /></article>
       <div className="benchmark-grid">
         <article className="benchmark-card featured"><span>40 / 40 / 20</span><strong>{signedPct(result.cagr)}</strong><p>CAGR・MDD −{result.mdd.toFixed(2)}%</p></article>
@@ -232,7 +236,7 @@ export default function Ryan404020Strategy({ baseRows, leveragedRows, qqqRows }:
         <summary><span>策略事件明細</span><b>{result.events.length} 筆</b></summary>
         <div className="table-wrap"><table><thead><tr><th>日期</th><th>事件</th><th>訊號</th><th>0050 乖離</th><th>0050</th><th>00631L</th><th>交易金額</th></tr></thead><tbody>{result.events.map((event, index) => <tr key={`${event.date}-${event.kind}-${index}`}><td>{event.date.replaceAll('-', '/')}</td><td className={event.kind === 'exit' || event.kind === 'rebalance-sell' ? 'sell' : event.kind === 'reentry' || event.kind === 'rebalance-buy' ? 'leverage-buy' : 'buy'}>{eventLabel(event.kind)}</td><td>{event.signal}</td><td className={event.deviationPct >= 0 ? 'positive' : 'negative'}>{signedPct(event.deviationPct)}</td><td>{event.basePrice.toFixed(2)}</td><td>{event.leveragedPrice.toFixed(2)}</td><td>{money.format(event.amount)} 元</td></tr>)}</tbody></table></div>
       </details>
-      <p className="backtest-note">資料範圍受 00631L 上市日限制；0050 與 00631L 價格已還原 ETF 分割，QQQ 日線來自 Yahoo Finance。未納入股息再投入、匯率、現金利息與滑價。歷史績效不代表未來報酬。</p>
+      <p className="backtest-note">資料範圍受 00631L 上市日限制。0050 採含息還原價，兩檔台股 ETF 均已還原分割，QQQ 日線來自 Yahoo Finance。回測未納入匯率、現金利息與滑價。歷史績效不代表未來報酬。</p>
     </section>}
 
     <section className="method" id="ryan-method"><div><span>03</span><h2>回測口徑</h2></div><ol><li><b>固定底倉與保命金</b><p>起始以 40% 買 0050、40% 買 00631L、20% 留現金；底倉與保命金不參與換倉。</p></li><li><b>門檻再平衡</b><p>多頭模式下，00631L 相對前次基準價跨越設定漲跌幅時，將正二調回總資產 40%；賣出進入備戰現金，買進不動用保命現金。</p></li><li><b>收盤確認、次日成交</b><p>單日 ±5% 訊號以當日收盤成交；連續三日 ±3% 訊號於下一個共同交易日開盤成交，避免偷看未來。</p></li><li><b>QQQ 採已知資訊</b><p>每個台股交易日使用日期早於該日、最近一筆可得的 QQQ 收盤與 240MA；低於 −10% 時清空 00631L，未解除時不重新進場。</p></li><li><b>微笑曲線按循環控管</b><p>正二撤退後，以撤退當下總資產為階梯金額基準；左側每階 5%、右側每階 2%，各方向同一階只買一次，且以可用備戰金為上限。</p></li><li><b>基準保持可比較</b><p>0050 與 00631L 基準皆為起始一次買進；50/50 基準每年首個交易日調回正二與現金各半，三者均計入相同交易成本。</p></li></ol></section>

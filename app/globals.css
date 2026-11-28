@@ -158,9 +158,10 @@ h2, h3, p { margin-top: 0; }
 .mdd-point { fill: var(--red); stroke: var(--card); stroke-width: 3; }
 .mdd-label { fill: var(--red); font: 800 11px ui-sans-serif, sans-serif; }
 .drawdown-help { margin: -5px 0 0; color: var(--muted); text-align: center; font-size: 11px; }
-.legend { display: flex; justify-content: center; gap: 20px; color: var(--muted); font-size: 11px; }
+.legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; color: var(--muted); font-size: 11px; }
 .legend span { display: flex; align-items: center; gap: 6px; }
 .legend i { width: 8px; height: 8px; border-radius: 50%; }
+.legend .benchmark-swatch { width: 15px; height: 0; border-top: 2px dashed currentColor; border-radius: 0; }
 .two-column { display: grid; grid-template-columns: 1.55fr .75fr; gap: 22px; }
 .two-column .panel { min-width: 0; }
 .annual-panel { max-height: 388px; overflow: hidden; }
