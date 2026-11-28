@@ -89,5 +89,12 @@ assert.ok(keep.simple, 'no intermediate cash flows → CAGR');
 assert.ok(keep.ending > ret.ending, 'keeping the money ends higher than withdrawing');
 console.log(`PASS 退休不提領: 期末 ${Math.round(keep.ending / 1e4)} 萬（提領版 ${Math.round(ret.ending / 1e4)} 萬＋已提領 ${Math.round(ret.withdrawn / 1e4)} 萬），CAGR ${keep.annualized.toFixed(2)}%`);
 
+// ── 頁面預設階梯 10/20/30/40/50 ──
+const ui = runAliang73Backtest(prices, { ...settings, rungs: [10, 20, 30, 40, 50] });
+const uiRet = runAliang73Backtest(prices, { ...settings, rungs: [10, 20, 30, 40, 50], retire: { ...retireOff, enabled: true } });
+assert.ok(ui.dipCount >= r.dipCount, 'shallower rungs trigger at least as often');
+assert.ok(ui.trades.filter((t) => t.label.startsWith('大跌加碼')).every((t) => /−(10|20|30|40|50)%/.test(t.label)));
+console.log(`PASS 預設階梯 10-50: 累積期年化 ${ui.annualized.toFixed(2)}%，加碼 ${ui.dipCount} 次；退休 333 ${uiRet.retiredAt}，XIRR ${uiRet.annualized.toFixed(2)}%`);
+
 // 配置合計不是 100% 要報錯
 assert.throws(() => runAliang73Backtest(prices, { ...settings, retire: { ...retireOff, enabled: true, mix: { leveraged: 50, nasdaq: 30, cash: 30 } } }), /100%/);
