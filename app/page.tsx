@@ -6,6 +6,7 @@ import LineChart, { compactMoney, type AssetCurvePoint } from './asset-chart';
 import DrawdownChart, { DrawdownMetric } from './drawdown-chart';
 import Ma240Strategy from './ma240-strategy';
 import Ryan404020Strategy from './ryan-404020-strategy';
+import Aliang73Strategy from './aliang-73-strategy';
 import WeeklyStrategy from './weekly-strategy';
 import { adjust0050ForSplits, adjust00631LForSplits, type OhlcRow } from './price-adjustments';
 
@@ -215,7 +216,7 @@ export default function Home() {
   const [builtinData, setBuiltinData] = useState<PriceRow[]>([]);
   const [baseData, setBaseData] = useState<PriceRow[]>([]);
   const [qqqData, setQqqData] = useState<PriceRow[]>([]);
-  const [activeStrategy, setActiveStrategy] = useState<'threshold' | 'ma240' | 'ryan404020' | 'weekly'>('threshold');
+  const [activeStrategy, setActiveStrategy] = useState<'threshold' | 'ma240' | 'ryan404020' | 'weekly' | 'aliang73'>('threshold');
   const [dataName, setDataName] = useState('尚未選擇檔案');
   const [isCustom, setIsCustom] = useState(false);
   const [splitAdjusted, setSplitAdjusted] = useState(false);
@@ -318,12 +319,14 @@ export default function Home() {
     ma240: ['#ma-settings', '#ma-results', '#ma-method'],
     ryan404020: ['#ryan-settings', '#ryan-results', '#ryan-method'],
     weekly: ['#weekly-settings', '#weekly-results', '#weekly-method'],
+    aliang73: ['#aliang-settings', '#aliang-results', '#aliang-method'],
   }[activeStrategy];
   const hero = {
     threshold: ['00631L × 現金', '當價格跨越設定門檻，自動將 00631L 與現金調回目標比例。用歷史資料快速檢視報酬、回撤與每次交易。'],
     ma240: ['0050 240MA × 回撤階梯', '新資金依 0050 的 240 日均線選擇標的；既有 0050 遇到回撤時，再分四階段逐步轉成 00631L。'],
     ryan404020: ['0050 × 00631L × QQQ 風險訊號', '用 40% 0050 打底、40% 00631L 進攻、20% 現金保命；以 0050 年線控制進退，再用 QQQ 年線乖離補上跨市場風險保險。'],
     weekly: ['0050 20 週均線 × 00631L', '0050 週收盤跌破 20 週均線，下一週開盤賣出一半的 00631L。防守期間按跌幅分批加碼 00631L。'],
+    aliang73: ['阿良 EP144 × 七三配', '累積期七成 00631L、三成現金一次到位，不擇時、不做再平衡；新資金一樣七三配，只有正二大跌時才動用現金加碼。'],
   }[activeStrategy];
 
   return (
@@ -347,7 +350,9 @@ export default function Home() {
               ? <div className="hero-note ma-note"><span>雙重規則</span><strong>新資金看 240MA</strong><b>線上 0050／線下 00631L</b><hr /><strong>既有 0050 看回撤</strong><b>−10% 至 −25% 分批轉正二</b></div>
               : activeStrategy === 'ryan404020'
                 ? <div className="hero-note ryan-note"><span>40 / 40 / 20</span><strong>年線失守，正二撤退</strong><b>年線之下只承接 0050</b><hr /><strong>QQQ 低於年線 −10%</strong><b>跨市場強制清倉</b></div>
-                : <div className="hero-note ma-note"><span>20 週均線</span><strong>跌破週線，正二減半</strong><hr /><strong>每階加碼 5%</strong><b>最多六階，合計 30%</b></div>}
+                : activeStrategy === 'weekly'
+                  ? <div className="hero-note ma-note"><span>20 週均線</span><strong>跌破週線，正二減半</strong><hr /><strong>每階加碼 5%</strong><b>最多六階，合計 30%</b></div>
+                  : <div className="hero-note ma-note"><span>七三配</span><strong>七成正二，漲了不賣</strong><b>累積期不再平衡</b><hr /><strong>三成現金，大跌才用</strong><b>距前高 −20／−40／−60% 加碼</b></div>}
         </section>
 
         <div className="strategy-tabs" role="tablist" aria-label="選擇回測策略">
@@ -355,6 +360,7 @@ export default function Home() {
           <button role="tab" aria-selected={activeStrategy === 'ma240'} className={activeStrategy === 'ma240' ? 'active' : ''} onClick={() => setActiveStrategy('ma240')}><span>02</span><strong>240 年線＋分批轉正二</strong><small>新資金擇標的・回撤換倉</small></button>
           <button role="tab" aria-selected={activeStrategy === 'ryan404020'} className={activeStrategy === 'ryan404020' ? 'active' : ''} onClick={() => setActiveStrategy('ryan404020')}><span>03</span><strong>40 / 40 / 20 均線策略</strong><small>正二進退・微笑曲線・QQQ 保險</small></button>
           <button role="tab" aria-selected={activeStrategy === 'weekly'} className={activeStrategy === 'weekly' ? 'active' : ''} onClick={() => setActiveStrategy('weekly')}><span>04</span><strong>20 週均線＋階梯加碼</strong><small>正二半倉防守</small></button>
+          <button role="tab" aria-selected={activeStrategy === 'aliang73'} className={activeStrategy === 'aliang73' ? 'active' : ''} onClick={() => setActiveStrategy('aliang73')}><span>05</span><strong>阿良七三配</strong><small>七成正二・三成現金・大跌加碼</small></button>
         </div>
 
         {activeStrategy === 'threshold' ? <>
@@ -453,7 +459,9 @@ export default function Home() {
           ? <Ma240Strategy baseRows={baseData} leveragedRows={builtinData} />
           : activeStrategy === 'ryan404020'
             ? <Ryan404020Strategy baseRows={baseData} leveragedRows={builtinData} qqqRows={qqqData} />
-            : <WeeklyStrategy baseRows={baseData} leveragedRows={builtinData} />}
+            : activeStrategy === 'weekly'
+              ? <WeeklyStrategy baseRows={baseData} leveragedRows={builtinData} />
+              : <Aliang73Strategy baseRows={baseData} leveragedRows={builtinData} />}
       </div>
       <footer><span>00631L 回測策略</span><p>所有計算皆在瀏覽器本機完成・歷史績效不代表未來報酬</p></footer>
     </main>

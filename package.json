@@ -11,7 +11,7 @@
     "start": "vinext start",
     "test:split": "node --experimental-strip-types scripts/check-split-adjustment.mjs",
     "test:data": "node --experimental-strip-types scripts/check-adjusted-data.mjs",
-    "test:strategy": "npm run test:split && npm run test:data && node --experimental-strip-types scripts/check-ma240-strategy.mjs && node --experimental-strip-types scripts/check-ryan-404020-strategy.mjs",
+    "test:strategy": "npm run test:split && npm run test:data && node --experimental-strip-types scripts/check-ma240-strategy.mjs && node --experimental-strip-types scripts/check-ryan-404020-strategy.mjs && node --experimental-strip-types scripts/check-aliang-73-strategy.mjs",
     "update:data": "node scripts/update-data.mjs",
     "update:00631l": "node scripts/update-data.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"

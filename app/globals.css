@@ -60,7 +60,7 @@ a { color: inherit; text-decoration: none; }
 .hero-note.ryan-note { background: #f6bf73; transform: rotate(-1deg); }
 .hero-note.ryan-note > b { color: #76381e; }
 
-.strategy-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--ink); border-bottom: 0; background: var(--ink); gap: 1px; }
+.strategy-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--ink); border-bottom: 0; background: var(--ink); gap: 1px; }
 .strategy-tabs button { min-height: 86px; display: grid; grid-template-columns: auto 1fr; align-content: center; align-items: center; gap: 4px 12px; padding: 14px 18px; border: 0; background: #e9ebe3; color: var(--muted); text-align: left; cursor: pointer; transition: .18s ease; }
 .strategy-tabs button:hover { background: var(--card); }
 .strategy-tabs button.active { background: var(--ink); color: white; }
@@ -265,6 +265,8 @@ footer span { color: var(--lime); font-weight: 900; letter-spacing: .12em; text-
 footer p { margin: 0; }
 
 @media (max-width: 900px) {
+  .strategy-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .strategy-tabs button:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .topbar { grid-template-columns: 1fr auto; }
   .topbar nav { display: none; }
   .hero { grid-template-columns: 1fr; padding-top: 68px; }
