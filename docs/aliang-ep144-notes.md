@@ -1,6 +1,6 @@
 # 阿良 EP144《阿良濃縮再提煉的簡單正二投資法》重點整理
 
-來源：https://youtu.be/2CjaKn-e0tI （Clubhouse／Podcast 節目，2025/6/18 錄）。以下為重點摘要，非逐字稿。
+來源：https://youtu.be/2CjaKn-e0tI （Clubhouse／Podcast 節目，2026/6/18 錄，隔天端午）。以下為重點摘要，非逐字稿。
 回測實作：`app/aliang-73-backtest.ts`（分頁 05「阿良七三配」）。
 
 ## 累積期（還在工作）：七三配
