@@ -216,7 +216,7 @@ export default function Home() {
   const [builtinData, setBuiltinData] = useState<PriceRow[]>([]);
   const [baseData, setBaseData] = useState<PriceRow[]>([]);
   const [qqqData, setQqqData] = useState<PriceRow[]>([]);
-  const [activeStrategy, setActiveStrategy] = useState<'threshold' | 'ma240' | 'ryan404020' | 'weekly' | 'aliang73'>('threshold');
+  const [activeStrategy, setActiveStrategy] = useState<'threshold' | 'ma240' | 'ryan404020' | 'weekly' | 'aliang73'>('aliang73');
   const [dataName, setDataName] = useState('尚未選擇檔案');
   const [isCustom, setIsCustom] = useState(false);
   const [splitAdjusted, setSplitAdjusted] = useState(false);
