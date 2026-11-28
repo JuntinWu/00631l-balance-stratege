@@ -101,6 +101,7 @@ h2, h3, p { margin-top: 0; }
 .input-shell:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px rgba(20,95,72,.1); }
 .input-shell input { width: 100%; min-width: 0; height: 100%; border: 0; outline: 0; padding: 0 13px; background: transparent; color: var(--ink); font-weight: 700; }
 .input-shell input:disabled { color: #7d8981; cursor: not-allowed; }
+.input-shell select { width: 100%; min-width: 0; height: 100%; border: 0; outline: 0; padding: 0 13px; background: transparent; color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
 .input-shell b { padding-right: 13px; color: var(--muted); font-size: 12px; font-weight: 600; }
 .input-shell.fixed-value { justify-content: space-between; padding-left: 13px; }
 .input-shell.fixed-value strong { font-size: 16px; }

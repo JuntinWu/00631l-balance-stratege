@@ -16,4 +16,9 @@ const lastDates = { '0050': base.at(-1).date, '00631L': leveraged.at(-1).date, Q
 const days = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) / 864e5;
 assert.ok(days(lastDates['0050'], lastDates['00631L']) <= 3, `0050/00631L out of sync: ${JSON.stringify(lastDates)}`);
 assert.ok(days(lastDates['0050'], lastDates.QQQ) <= 5, `QQQ out of sync: ${JSON.stringify(lastDates)}`);
+for (const name of ['00685L', '00662', '00865B']) {
+  const rows = await readRows(name);
+  assert.ok(days(lastDates['0050'], rows.at(-1).date) <= 3, `${name} out of sync: ${rows.at(-1).date}`);
+  lastDates[name] = rows.at(-1).date;
+}
 console.log(`PASS: 0050 已含息還原（2014/10/31 = ${oct31.close.toFixed(3)}），資料同步至 ${JSON.stringify(lastDates)}`);

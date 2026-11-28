@@ -24,6 +24,15 @@ const KNOWN_0050_SPLITS: SplitAdjustment[] = [
   { effectiveDate: '2025-06-18', ratio: 4 },
 ];
 
+// 資料中的分割（前一日收盤／當日收盤）：00685L 306 → 12.23（25.0）、00662 117.8 → 23.1（5.1）
+const KNOWN_00685L_SPLITS: SplitAdjustment[] = [
+  { effectiveDate: '2026-07-07', ratio: 25 },
+];
+
+const KNOWN_00662_SPLITS: SplitAdjustment[] = [
+  { effectiveDate: '2026-11-17', ratio: 5 },
+];
+
 function adjustForSplits(rows: OhlcRow[], splits: SplitAdjustment[]): AdjustedPrices {
   let adjusted = rows.map((row) => ({ ...row }));
   const appliedSplits: SplitAdjustment[] = [];
@@ -61,4 +70,12 @@ export function adjust00631LForSplits(rows: OhlcRow[]): AdjustedPrices {
 
 export function adjust0050ForSplits(rows: OhlcRow[]): AdjustedPrices {
   return adjustForSplits(rows, KNOWN_0050_SPLITS);
+}
+
+export function adjust00685LForSplits(rows: OhlcRow[]): AdjustedPrices {
+  return adjustForSplits(rows, KNOWN_00685L_SPLITS);
+}
+
+export function adjust00662ForSplits(rows: OhlcRow[]): AdjustedPrices {
+  return adjustForSplits(rows, KNOWN_00662_SPLITS);
 }

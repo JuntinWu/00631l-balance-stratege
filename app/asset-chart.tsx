@@ -13,10 +13,12 @@ export const compactMoney = (value: number) => {
   return money.format(value);
 };
 
-export default function LineChart({ points, ratio = false, benchmark }: {
+export default function LineChart({ points, ratio = false, benchmark, labels }: {
   points: AssetCurvePoint[];
   ratio?: boolean;
   benchmark?: ReadonlyMap<string, number>;
+  /** 自訂圖例文字（預設 00631L部位／現金） */
+  labels?: { asset?: string; cash?: string };
 }) {
   const width = 1080;
   const height = 310;
@@ -38,8 +40,8 @@ export default function LineChart({ points, ratio = false, benchmark }: {
     ? [{ key: 'ratio' as const, color: '#62e6ba', name: '00631L占比' }]
     : [
         { key: 'total' as const, color: '#ffd166', name: '總資產' },
-        { key: 'asset' as const, color: '#62e6ba', name: '00631L部位' },
-        { key: 'cash' as const, color: '#9fb3d7', name: '現金' },
+        { key: 'asset' as const, color: '#62e6ba', name: labels?.asset ?? '00631L部位' },
+        { key: 'cash' as const, color: '#9fb3d7', name: labels?.cash ?? '現金' },
       ];
   const max = ratio ? 100 : points.reduce((high, point) =>
     Math.max(high, point.total, point.asset, point.cash, comparison?.get(point.date) ?? 0), 1);

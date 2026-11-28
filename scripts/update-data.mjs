@@ -1,4 +1,4 @@
-// 一次更新 0050、00631L、QQQ 三份資料，避免各策略因日期不同步而少算區間。
+// 一次更新 0050、00631L、QQQ（及 00685L、00662、00865B）資料，避免各策略因日期不同步而少算區間。
 //
 // 台股兩檔使用「還原股價」：抓 FinMind 原始日K（TaiwanStockPrice）與除權息結果
 // （TaiwanStockDividendResult），在每個除息日之前的價格乘上 after_price / before_price，
@@ -109,6 +109,10 @@ const targets = [
   ['0050', () => fetchAdjustedTaiwan('0050', '2014-01-01')],
   ['00631L', () => fetchAdjustedTaiwan('00631L', '2014-10-31')],
   ['QQQ', fetchQqq],
+  // 阿良七三配／三刀流：另一檔台股正二、Nasdaq-100 原型、美債短期 ETF（退休期現金部位）
+  ['00685L', () => fetchAdjustedTaiwan('00685L', '2017-01-01')],
+  ['00662', () => fetchAdjustedTaiwan('00662', '2015-01-01')],
+  ['00865B', () => fetchAdjustedTaiwan('00865B', '2021-01-01')],
 ];
 const results = [];
 for (const [name, fetcher] of targets) {
