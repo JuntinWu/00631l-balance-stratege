@@ -29,6 +29,7 @@ type Draft = {
   expenseWan: number;
   multiple: number;
   inflationPct: number;
+  withdraw: boolean;
   preset: MixPreset;
   mixLev: number;
   mixNas: number;
@@ -48,6 +49,7 @@ const defaults: Draft = {
   expenseWan: 100,
   multiple: 20,
   inflationPct: 2,
+  withdraw: true,
   preset: '333',
   mixLev: 33.3,
   mixNas: 33.3,
@@ -70,7 +72,7 @@ function toSettings(d: Draft, earliest: string, latest: string): Aliang73Setting
     startDate: d.startDate || earliest,
     endDate: d.endDate || latest,
     legMode: d.legMode,
-    retire: { enabled: d.retireEnabled, expenseWan: d.expenseWan, multiple: d.multiple, inflationPct: d.inflationPct, mix },
+    retire: { enabled: d.retireEnabled, expenseWan: d.expenseWan, multiple: d.multiple, inflationPct: d.inflationPct, withdraw: d.withdraw, mix },
   };
 }
 
@@ -164,6 +166,10 @@ export default function Aliang73Strategy({ baseRows, leveragedRows }: {
             <span>金融資產達年開銷 N 倍時退休，轉成退休配置</span>
           </label>
           {draft.retireEnabled && <>
+            <label className="weekly-filter" style={{ marginBottom: 14 }}>
+              <input type="checkbox" checked={draft.withdraw} onChange={(event) => set('withdraw', event.target.checked)} />
+              <span>每年提領生活費</span>
+            </label>
             <div className="form-grid compact">
               <label className="field"><span>年生活開銷（起始年）</span><div className="input-shell"><input type="number" min={1} step={1} value={draft.expenseWan || ''} onChange={num('expenseWan')} /><b>萬元</b></div></label>
               <label className="field"><span>退休門檻</span><div className="input-shell"><input type="number" min={1} step={1} value={draft.multiple || ''} onChange={num('multiple')} /><b>倍</b></div></label>
@@ -178,7 +184,7 @@ export default function Aliang73Strategy({ baseRows, leveragedRows }: {
                 <label className="field"><span>現金／00865B</span><div className="input-shell"><input type="number" min={0} max={100} step={0.1} value={draft.mixCash} onChange={num('mixCash')} /><b>%</b></div></label>
               </>}
             </div>
-            <p className="setting-help">每天收盤檢查：總資產 ≥ 當年年開銷 × 門檻倍數，就在當天收盤提領第一年生活費，再把剩下資產調成退休配置。之後每年最後一個交易日收盤提領下一年生活費（依通膨成長）並再平衡。現金部位在 00865B 上市（2021/1）前以現金計息，上市後放 00865B。退休後不再投入新資金，也不做大跌加碼。</p>
+            <p className="setting-help">每天收盤檢查：總資產 ≥ 當年年開銷 × 門檻倍數，就在當天收盤提領第一年生活費，再把剩下資產調成退休配置。之後每年最後一個交易日收盤提領下一年生活費（依通膨成長）並再平衡。現金部位在 00865B 上市（2021/1）前以現金計息，上市後放 00865B。退休後不再投入新資金，也不做大跌加碼。不勾「每年提領生活費」時，只轉配置、每年再平衡，年開銷僅用來判斷退休門檻。</p>
           </>}
         </div>
         {(error || loadError) && <p className="error" role="alert">{error || loadError}</p>}
@@ -189,11 +195,11 @@ export default function Aliang73Strategy({ baseRows, leveragedRows }: {
     {result && <section className="results" id="aliang-results" ref={resultRef}>
       <div className="results-head">
         <div><h2>回測結果</h2></div>
-        <div className="strategy-chip">七三配 {legName}<b>{applied.retireEnabled ? `${applied.multiple} 倍轉 ${appliedMix}` : '只看累積期'}</b></div>
+        <div className="strategy-chip">七三配 {legName}<b>{applied.retireEnabled ? `${applied.multiple} 倍轉 ${appliedMix}${applied.withdraw ? '' : '・不提領'}` : '只看累積期'}</b></div>
       </div>
       {applied.retireEnabled && <p className="setting-help">
         {result.retiredAt
-          ? <>於 <b>{result.retiredAt.replaceAll('-', '/')}</b> 達到門檻退休（當時資產 {wan(result.retiredTotal)}），之後共提領生活費 {wan(result.withdrawn)}。{result.depleted && <b> 資產已用盡。</b>}</>
+          ? <>於 <b>{result.retiredAt.replaceAll('-', '/')}</b> 達到門檻退休（當時資產 {wan(result.retiredTotal)}），{applied.withdraw ? `之後共提領生活費 ${wan(result.withdrawn)}。` : '之後每年再平衡、不提領。'}{result.depleted && <b> 資產已用盡。</b>}</>
           : result.waitingForNasdaq
             ? <>已達門檻，但 00662 尚未上市（2016/6 起），等上市後才轉換。</>
             : <>回測期間內尚未達到 {applied.multiple} 倍年開銷，全程維持累積期。</>}
@@ -216,7 +222,7 @@ export default function Aliang73Strategy({ baseRows, leveragedRows }: {
             <td>{trade.date.replaceAll('-', '/')}</td>
             <td className={trade.amount < 0 ? 'sell' : 'buy'}>{trade.label}</td>
             <td>{trade.price.toFixed(2)}</td>
-            <td>{trade.amount < 0 ? '提領 ' : '買進 '}{money.format(Math.abs(trade.amount))} 元</td>
+            <td>{trade.amount === 0 ? '—' : `${trade.amount < 0 ? '提領 ' : '買進 '}${money.format(Math.abs(trade.amount))} 元`}</td>
             <td>{trade.ratio.toFixed(1)}%</td>
           </tr>)}</tbody>
         </table></div>
@@ -230,7 +236,7 @@ export default function Aliang73Strategy({ baseRows, leveragedRows }: {
         <li><b>累積期不再平衡</b><p>正二漲上去就讓它漲，不賣出；現金只依年利率計息（日複利）。每月新資金一樣七三配。</p></li>
         <li><b>大跌才動用現金</b><p>節目只說大跌 10%～20% 時加碼。本回測量化成：00631L 距收盤前高 −20%／−40%／−60%（約等於大盤 −10%／−20%／−30%）各投入一份現金。盤中觸價以門檻價成交，開盤跳空以開盤價成交；收盤創新高後重置。</p></li>
         <li><b>退休門檻：20 倍年開銷</b><p>金融資產（現金＋股票）達當年年開銷的 20 倍就退休。節目提到信貸要另外算（借來的本金先扣掉），本回測不含借貸，所以直接用總資產判斷。</p></li>
-        <li><b>退休期：降到 beta ≤ 100% 並每年再平衡</b><p>預設三刀流 333：正二、00662、現金各 1/3（beta = 2/3 + 1/3 = 100%）。也可選 433、過渡用的 253、163 或自訂。每年最後一個交易日收盤先提領下一年生活費（依通膨成長），再賣超配、買低配，調回目標比例；選各半時，00631L 與 00685L 也各自調回正二部位的一半。現金部位在 00865B 上市前以現金計息，上市後放 00865B。</p></li>
+        <li><b>退休期：降到 beta ≤ 100% 並每年再平衡</b><p>預設三刀流 333：正二、00662、現金各 1/3（beta = 2/3 + 1/3 = 100%）。也可選 433、過渡用的 253、163 或自訂。每年最後一個交易日收盤先提領下一年生活費（依通膨成長；可關閉提領），再賣超配、買低配，調回目標比例；選各半時，00631L 與 00685L 也各自調回正二部位的一半。現金部位在 00865B 上市前以現金計息，上市後放 00865B。</p></li>
         <li><b>交易成本</b><p>買進手續費 0.1425% × 1.8 折；賣出股票型 ETF 另計 0.1% 證交稅，債券 ETF（00865B）免證交稅。</p></li>
         <li><b>簡化與限制</b><p>00685L 的大跌加碼成交價，以 00631L 同一時點的相對漲跌估算。不模擬質押、信貸、房貸等借款槓桿。</p></li>
       </ol>

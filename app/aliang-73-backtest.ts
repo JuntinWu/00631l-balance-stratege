@@ -36,6 +36,8 @@ export type Aliang73Settings = {
     expenseWan: number;
     multiple: number;
     inflationPct: number;
+    /** 是否每年提領生活費；false＝只轉配置、每年再平衡，不提領 */
+    withdraw: boolean;
     /** 百分比，合計 100 */
     mix: RetireMix;
   };
@@ -339,14 +341,14 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
           if (retire.mix.nasdaq > 0 && !nasRow) {
             waitingForNasdaq = true; // 00662 尚未上市，等上市後再轉換
           } else {
-            const paid = retireRebalance(row, r685?.close ?? 0, nasRow?.close ?? 1, bondRow?.close, expense);
+            const paid = retireRebalance(row, r685?.close ?? 0, nasRow?.close ?? 1, bondRow?.close, retire.withdraw ? expense : 0);
             withdrawn += paid;
             flows.push({ date: row.date, amount: paid });
             baseFlow(row.date, -paid, baseRow.close);
             phase = 'retired';
             retiredAt = row.date;
             retiredTotal = v.total;
-            record(row.date, `達 ${retire.multiple} 倍年開銷，轉退休配置並提領第一年生活費`, row.close, r685?.close ?? 0, -paid, nasRow?.close, bondRow?.close);
+            record(row.date, `達 ${retire.multiple} 倍年開銷，轉退休配置${retire.withdraw ? '並提領第一年生活費' : '（不提領）'}`, row.close, r685?.close ?? 0, -paid, nasRow?.close, bondRow?.close);
           }
         }
       }
@@ -356,12 +358,12 @@ export function runAliang73Backtest(prices: Aliang73Prices, settings: Aliang73Se
       if (next && next.date.slice(0, 4) !== row.date.slice(0, 4)) {
         const expense = expenseAt(next.date);
         const before = values(row.close, r685?.close ?? 0, nasRow?.close, bondRow?.close).total;
-        const paid = retireRebalance(row, r685?.close ?? 0, nasRow!.close, bondRow?.close, expense);
+        const paid = retireRebalance(row, r685?.close ?? 0, nasRow!.close, bondRow?.close, retire.withdraw ? expense : 0);
         withdrawn += paid;
         flows.push({ date: row.date, amount: paid });
         baseFlow(row.date, -paid, baseRow.close);
-        record(row.date, `年底提領 ${Math.round(paid / 10_000)} 萬＋再平衡`, row.close, r685?.close ?? 0, -paid, nasRow?.close, bondRow?.close);
-        if (paid < expense - 1 || before - paid <= 1) phase = 'depleted';
+        record(row.date, retire.withdraw ? `年底提領 ${Math.round(paid / 10_000)} 萬＋再平衡` : '年底再平衡（不提領）', row.close, r685?.close ?? 0, -paid, nasRow?.close, bondRow?.close);
+        if (retire.withdraw && (paid < expense - 1 || before - paid <= 1)) phase = 'depleted';
       }
     }
 

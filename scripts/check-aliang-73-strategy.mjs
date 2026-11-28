@@ -11,7 +11,7 @@ const prices = {
   nasdaq: adjust00662ForSplits(await readRows('00662')).rows,
   bond: await readRows('00865B'),
 };
-const retireOff = { enabled: false, expenseWan: 100, multiple: 20, inflationPct: 2, mix: { leveraged: 100 / 3, nasdaq: 100 / 3, cash: 100 / 3 } };
+const retireOff = { enabled: false, expenseWan: 100, multiple: 20, inflationPct: 2, withdraw: true, mix: { leveraged: 100 / 3, nasdaq: 100 / 3, cash: 100 / 3 } };
 const settings = { capitalWan: 1000, targetPct: 70, monthlyWan: 0, cashRatePct: 1.5, rungs: [20, 40, 60], startDate: '2014-01-01', endDate: '2099-12-31', legMode: 'single', retire: retireOff };
 
 // XIRR 自我檢查：投 100、一年後拿回 110 → 10%
@@ -76,6 +76,18 @@ for (const date of rebalanceDates) {
 const drift = Math.max(...halfRet.curve.filter((p) => p.date > halfRet.retiredAt).map((p) => Math.abs(p.l631 / (p.l631 + p.l685) - 0.5)));
 assert.ok(drift > 0.005, 'legs should drift between rebalances');
 console.log(`PASS 各半＋退休: ${rebalanceDates.length} 次再平衡都調回 50/50（年中最大漂移 ${(drift * 100).toFixed(2)} 個百分點），XIRR ${halfRet.annualized.toFixed(2)}%`);
+
+// ── 退休但不提領：同一天轉配置、每年再平衡，沒有任何提領 ──
+const keep = runAliang73Backtest(prices, { ...settings, retire: { ...retireOff, enabled: true, withdraw: false } });
+assert.equal(keep.retiredAt, ret.retiredAt, 'same retirement trigger date');
+assert.equal(keep.withdrawn, 0);
+assert.ok(keep.trades.every((t) => t.amount >= 0), 'no withdrawals');
+const keepYearEnds = keep.trades.filter((t) => t.label === '年底再平衡（不提領）');
+assert.equal(keepYearEnds.length, yearEnds.length, 'still rebalances every year-end');
+for (const t of keepYearEnds) assert.ok(Math.abs(t.ratio - 100 / 3) < 1.5, `rebalanced to ~33% on ${t.date}`);
+assert.ok(keep.simple, 'no intermediate cash flows → CAGR');
+assert.ok(keep.ending > ret.ending, 'keeping the money ends higher than withdrawing');
+console.log(`PASS 退休不提領: 期末 ${Math.round(keep.ending / 1e4)} 萬（提領版 ${Math.round(ret.ending / 1e4)} 萬＋已提領 ${Math.round(ret.withdrawn / 1e4)} 萬），CAGR ${keep.annualized.toFixed(2)}%`);
 
 // 配置合計不是 100% 要報錯
 assert.throws(() => runAliang73Backtest(prices, { ...settings, retire: { ...retireOff, enabled: true, mix: { leveraged: 50, nasdaq: 30, cash: 30 } } }), /100%/);
